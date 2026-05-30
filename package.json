@@ -1,0 +1,25 @@
+{
+  "name": "backend-easy",
+  "version": "1.0.0",
+  "description": "Backend MVC con API REST y vista principal",
+  "main": "src/server.js",
+  "scripts": {
+    "start": "node src/server.js",
+    "dev": "node --watch src/server.js"
+  },
+  "keywords": [
+    "mvc",
+    "rest",
+    "api",
+    "nodejs"
+  ],
+  "license": "MIT",
+  "dependencies": {
+    "cors": "^2.8.5",
+    "dotenv": "^16.4.7",
+    "ejs": "^3.1.10",
+    "express": "^4.21.2",
+    "mysql2": "^3.22.4",
+    "sequelize": "^6.37.5"
+  }
+}

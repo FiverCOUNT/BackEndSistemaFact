@@ -1,0 +1,159 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title><%= title %></title>
+  <link rel="stylesheet" href="/css/style.css" />
+</head>
+<body>
+  <header class="header">
+    <h1><%= title %></h1>
+    <p>API REST MVC — consumible desde cualquier cliente</p>
+  </header>
+
+  <main class="container">
+    <section class="card">
+      <h2>Items</h2>
+      <p class="api-hint">Endpoint: <code><%= apiBase %></code></p>
+
+      <form id="item-form" class="form">
+        <input type="hidden" id="item-id" />
+        <div class="form-row">
+          <input type="text" id="name" placeholder="Nombre" required />
+          <input type="text" id="description" placeholder="Descripción" />
+          <input type="number" id="price" placeholder="Precio" step="0.01" min="0" required />
+        </div>
+        <div class="form-actions">
+          <button type="submit" id="submit-btn">Agregar</button>
+          <button type="button" id="cancel-btn" class="btn-secondary" hidden>Cancelar</button>
+        </div>
+      </form>
+
+      <div id="message" class="message" hidden></div>
+      <ul id="items-list" class="items-list"></ul>
+    </section>
+
+    <section class="card docs">
+      <h2>API REST</h2>
+      <table>
+        <thead>
+          <tr><th>Método</th><th>Ruta</th><th>Descripción</th></tr>
+        </thead>
+        <tbody>
+          <tr><td>GET</td><td><code>/api/items</code></td><td>Listar todos</td></tr>
+          <tr><td>GET</td><td><code>/api/items/:id</code></td><td>Obtener uno</td></tr>
+          <tr><td>POST</td><td><code>/api/items</code></td><td>Crear</td></tr>
+          <tr><td>PUT</td><td><code>/api/items/:id</code></td><td>Actualizar</td></tr>
+          <tr><td>DELETE</td><td><code>/api/items/:id</code></td><td>Eliminar</td></tr>
+        </tbody>
+      </table>
+    </section>
+  </main>
+
+  <script>
+    const API_BASE = '<%= apiBase %>';
+    const form = document.getElementById('item-form');
+    const list = document.getElementById('items-list');
+    const message = document.getElementById('message');
+    const itemId = document.getElementById('item-id');
+    const submitBtn = document.getElementById('submit-btn');
+    const cancelBtn = document.getElementById('cancel-btn');
+
+    function showMessage(text, isError = false) {
+      message.textContent = text;
+      message.className = 'message ' + (isError ? 'error' : 'success');
+      message.hidden = false;
+      setTimeout(() => { message.hidden = true; }, 3000);
+    }
+
+    async function loadItems() {
+      const res = await fetch(API_BASE);
+      const json = await res.json();
+      list.innerHTML = '';
+
+      json.data.forEach((item) => {
+        const li = document.createElement('li');
+        li.innerHTML = `
+          <div class="item-info">
+            <strong>${item.name}</strong>
+            <span>${item.description || '—'}</span>
+            <span class="price">$${Number(item.price).toFixed(2)}</span>
+          </div>
+          <div class="item-actions">
+            <button type="button" data-edit="${item.id}">Editar</button>
+            <button type="button" data-delete="${item.id}" class="btn-danger">Eliminar</button>
+          </div>
+        `;
+        list.appendChild(li);
+      });
+    }
+
+    function resetForm() {
+      form.reset();
+      itemId.value = '';
+      submitBtn.textContent = 'Agregar';
+      cancelBtn.hidden = true;
+    }
+
+    form.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const payload = {
+        name: document.getElementById('name').value,
+        description: document.getElementById('description').value,
+        price: document.getElementById('price').value,
+      };
+
+      const id = itemId.value;
+      const url = id ? `${API_BASE}/${id}` : API_BASE;
+      const method = id ? 'PUT' : 'POST';
+
+      const res = await fetch(url, {
+        method,
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+      const json = await res.json();
+
+      if (!res.ok) {
+        showMessage(json.message || 'Error al guardar', true);
+        return;
+      }
+
+      showMessage(id ? 'Item actualizado' : 'Item creado');
+      resetForm();
+      loadItems();
+    });
+
+    cancelBtn.addEventListener('click', resetForm);
+
+    list.addEventListener('click', async (e) => {
+      const editId = e.target.dataset.edit;
+      const deleteId = e.target.dataset.delete;
+
+      if (editId) {
+        const res = await fetch(`${API_BASE}/${editId}`);
+        const json = await res.json();
+        const item = json.data;
+        itemId.value = item.id;
+        document.getElementById('name').value = item.name;
+        document.getElementById('description').value = item.description;
+        document.getElementById('price').value = item.price;
+        submitBtn.textContent = 'Actualizar';
+        cancelBtn.hidden = false;
+      }
+
+      if (deleteId) {
+        if (!confirm('¿Eliminar este item?')) return;
+        const res = await fetch(`${API_BASE}/${deleteId}`, { method: 'DELETE' });
+        if (res.ok) {
+          showMessage('Item eliminado');
+          loadItems();
+        }
+      }
+    });
+
+    loadItems();
+  </script>
+</body>
+</html>
