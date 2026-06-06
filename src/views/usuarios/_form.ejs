@@ -1,0 +1,131 @@
+<div class="field">
+  <label for="email">Email</label>
+  <input
+    type="email"
+    id="email"
+    name="email"
+    value="<%= form.email || '' %>"
+    placeholder="usuario@empresa.com"
+    required
+  />
+</div>
+
+<% if (!isEdit) { %>
+  <div class="field">
+    <label for="contrasena">Contraseña</label>
+    <input
+      type="password"
+      id="contrasena"
+      name="contrasena"
+      placeholder="Mínimo 6 caracteres"
+      minlength="6"
+      required
+    />
+  </div>
+<% } else { %>
+  <div class="field">
+    <label for="nuevaContrasena">Nueva contraseña (opcional)</label>
+    <input
+      type="password"
+      id="nuevaContrasena"
+      name="nuevaContrasena"
+      placeholder="Dejar vacío para no cambiar"
+      autocomplete="new-password"
+      value=""
+    />
+    <span class="field-hint">Solo completa este campo si quieres cambiar la contraseña.</span>
+  </div>
+<% } %>
+
+<div class="field">
+  <label for="rol">Rol</label>
+  <select id="rol" name="rol" required>
+    <% roles.forEach(function(r) { %>
+      <option value="<%= r %>" <%= form.rol === r ? 'selected' : '' %>><%= r %></option>
+    <% }); %>
+  </select>
+  <span class="field-hint" id="rol-hint">
+    Administrador: acceso total. Usuario: solo catálogo de su almacén en la app.
+  </span>
+</div>
+
+<div class="field">
+  <label for="estado">Estado</label>
+  <select id="estado" name="estado" required>
+    <% estados.forEach(function(e) { %>
+      <option value="<%= e %>" <%= form.estado === e ? 'selected' : '' %>><%= e %></option>
+    <% }); %>
+  </select>
+</div>
+
+<div class="field">
+  <label for="companyId">Empresa</label>
+  <select id="companyId" name="companyId">
+    <option value="">— Sin empresa —</option>
+    <% companies.forEach(function(c) { %>
+      <option
+        value="<%= c.id %>"
+        data-ruc="<%= c.ruc %>"
+        <%= String(form.companyId) === String(c.id) ? 'selected' : '' %>
+      >
+        <%= c.nombre %> (RUC <%= c.ruc %>)
+      </option>
+    <% }); %>
+  </select>
+  <span class="field-hint" id="company-hint">Obligatoria para el rol Usuario.</span>
+</div>
+
+<div class="field" id="almacen-field">
+  <label for="almacenId">Almacén</label>
+  <select id="almacenId" name="almacenId">
+    <option value="">— Seleccionar almacén —</option>
+    <% almacenes.forEach(function(a) { %>
+      <option
+        value="<%= a.id %>"
+        data-company-ruc="<%= a.companyRuc %>"
+        <%= form.almacenId === a.id ? 'selected' : '' %>
+      >
+        <%= a.nombre %><% if (a.codigo) { %> (<%= a.codigo %>)<% } %>
+      </option>
+    <% }); %>
+  </select>
+  <span class="field-hint">Solo aplica al rol Usuario. Debe pertenecer a la empresa seleccionada.</span>
+</div>
+
+<script>
+(function () {
+  var rol = document.getElementById('rol');
+  var company = document.getElementById('companyId');
+  var almacenField = document.getElementById('almacen-field');
+  var almacen = document.getElementById('almacenId');
+  var options = Array.prototype.slice.call(almacen.querySelectorAll('option[data-company-ruc]'));
+
+  function selectedCompanyRuc() {
+    var opt = company.options[company.selectedIndex];
+    return opt ? opt.getAttribute('data-ruc') : '';
+  }
+
+  function syncForm() {
+    var isUsuario = rol.value === 'USUARIO';
+    almacenField.style.display = isUsuario ? '' : 'none';
+    if (!isUsuario) {
+      almacen.value = '';
+      return;
+    }
+    var ruc = selectedCompanyRuc();
+    options.forEach(function (opt) {
+      var match = !ruc || opt.getAttribute('data-company-ruc') === ruc;
+      opt.hidden = !match;
+      opt.disabled = !match;
+    });
+    if (almacen.value) {
+      var current = almacen.querySelector('option[value="' + almacen.value + '"]');
+      if (current && current.disabled) almacen.value = '';
+    }
+  }
+
+  rol.addEventListener('change', syncForm);
+  company.addEventListener('change', syncForm);
+  syncForm();
+})();
+</script>

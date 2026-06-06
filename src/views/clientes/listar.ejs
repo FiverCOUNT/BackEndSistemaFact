@@ -1,0 +1,83 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title><%= title %> — BackEnd Easy</title>
+  <link rel="stylesheet" href="/css/style.css" />
+</head>
+<body>
+  <header class="header">
+    <h1>BackEnd Easy</h1>
+    <p>Panel web</p>
+  </header>
+
+  <main class="container layout-with-nav">
+    <%- include('../partials/nav', { active: 'clientes' }) %>
+
+    <div class="main-content">
+      <section class="card">
+        <div class="card-header-row">
+          <div>
+            <h2><%= title %></h2>
+            <p class="api-hint"><%= total %> cliente(s) en total</p>
+          </div>
+        </div>
+
+        <%- include('../partials/flash', { flash }) %>
+        <%- include('../partials/list-search', { searchAction, searchPlaceholder, q, pageSize }) %>
+        <%- include('../partials/pagination', { pagination, q, paginationPosition: 'header' }) %>
+
+        <% if (clientes.length === 0) { %>
+          <p class="empty-state">
+            <% if (q) { %>
+              No hay resultados para «<%= q %>».
+            <% } else { %>
+              No hay clientes registrados.
+            <% } %>
+          </p>
+        <% } else { %>
+          <div class="table-wrap">
+            <table class="data-table">
+              <thead>
+                <tr>
+                  <th>Documento</th>
+                  <th>Razón social</th>
+                  <th>RUC empresa</th>
+                  <th>Teléfono</th>
+                  <th>Ubicación</th>
+                  <th>Estado</th>
+                  <th>Comprobantes</th>
+                </tr>
+              </thead>
+              <tbody>
+                <% clientes.forEach(function(c) { %>
+                  <tr>
+                    <td>
+                      <span class="muted"><%= c.tipoDocLabel %></span>
+                      <code><%= c.numeroDoc %></code>
+                    </td>
+                    <td><strong><%= c.razonSocial %></strong></td>
+                    <td class="muted"><%= c.companyRuc %></td>
+                    <td><%= c.telefono || '—' %></td>
+                    <td class="muted"><%= c.distrito || c.direccion || '—' %></td>
+                    <td>
+                      <% if (c.activo) { %>
+                        <span class="badge badge-activo">Activo</span>
+                      <% } else { %>
+                        <span class="badge badge-inactivo">Inactivo</span>
+                      <% } %>
+                    </td>
+                    <td><%= c.comprobantesCount %></td>
+                  </tr>
+                <% }); %>
+              </tbody>
+            </table>
+          </div>
+          <%- include('../partials/pagination', { pagination, q, paginationPosition: 'footer' }) %>
+        <% } %>
+      </section>
+    </div>
+  </main>
+</body>
+</html>

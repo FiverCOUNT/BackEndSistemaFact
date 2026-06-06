@@ -1,0 +1,40 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title><%= title %> — BackEnd Easy</title>
+  <link rel="stylesheet" href="/css/style.css" />
+</head>
+<body>
+  <header class="header">
+    <h1>BackEnd Easy</h1>
+    <p>Panel web</p>
+  </header>
+
+  <main class="container layout-with-nav">
+    <%- include('../partials/nav', { active: 'usuarios-crear' }) %>
+
+    <div class="main-content">
+    <section class="card">
+      <div class="card-header-row">
+        <h2><%= title %></h2>
+        <a href="/usuarios" class="btn-link btn-secondary">← Volver al listado</a>
+      </div>
+
+      <% if (error) { %>
+        <div class="message error"><%= error %></div>
+      <% } %>
+
+      <form class="form" method="POST" action="/usuarios">
+        <%- include('_form', { form, companies, almacenes, estados, roles, isEdit }) %>
+        <div class="form-actions">
+          <button type="submit">Crear usuario</button>
+          <a href="/usuarios" class="btn-link btn-secondary">Cancelar</a>
+        </div>
+      </form>
+    </section>
+    </div>
+  </main>
+</body>
+</html>

@@ -1,0 +1,19 @@
+<form class="list-search" method="GET" action="<%= searchAction %>">
+  <div class="list-search-row">
+    <input
+      type="search"
+      name="q"
+      value="<%= typeof q !== 'undefined' ? q : '' %>"
+      placeholder="<%= searchPlaceholder %>"
+      class="list-search-input"
+      autocomplete="off"
+    />
+    <button type="submit" class="btn-sm btn-edit">Buscar</button>
+    <% if (q) { %>
+      <a href="<%= searchAction %>" class="btn-sm btn-clear">Limpiar</a>
+    <% } %>
+  </div>
+  <% if (typeof pageSize !== 'undefined') { %>
+    <input type="hidden" name="limit" value="<%= pageSize %>" />
+  <% } %>
+</form>

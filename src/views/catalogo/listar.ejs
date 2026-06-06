@@ -1,0 +1,136 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title><%= title %> — BackEnd Easy</title>
+  <link rel="stylesheet" href="/css/style.css" />
+</head>
+<body>
+  <header class="header">
+    <h1>BackEnd Easy</h1>
+    <p>Panel web</p>
+  </header>
+
+  <main class="container layout-with-nav">
+    <%- include('../partials/nav', { active: 'catalogo' }) %>
+
+    <div class="main-content">
+      <section class="card">
+        <div class="card-header-row">
+          <div>
+            <h2><%= title %></h2>
+            <p class="api-hint"><%= total %> ítem(s) en total</p>
+          </div>
+          <a href="/catalogo/crear" class="btn-link">+ Nuevo ítem</a>
+        </div>
+
+        <%- include('../partials/flash', { flash }) %>
+
+        <form class="list-search" method="GET" action="<%= searchAction %>">
+          <div class="list-search-row">
+            <input
+              type="search"
+              name="q"
+              value="<%= q %>"
+              placeholder="<%= searchPlaceholder %>"
+              class="list-search-input"
+              autocomplete="off"
+            />
+            <select name="kind" class="list-filter-select">
+              <option value="">Todos los tipos</option>
+              <% kinds.forEach(function(k) { %>
+                <option value="<%= k %>" <%= kind === k ? 'selected' : '' %>><%= k %></option>
+              <% }); %>
+            </select>
+            <select name="company" class="list-filter-select">
+              <option value="">Todas las empresas</option>
+              <% companies.forEach(function(c) { %>
+                <option value="<%= c.ruc %>" <%= companyRuc === c.ruc ? 'selected' : '' %>><%= c.nombre %></option>
+              <% }); %>
+            </select>
+            <button type="submit" class="btn-sm btn-edit">Buscar</button>
+            <% if (q || kind || companyRuc) { %>
+              <a href="<%= searchAction %>" class="btn-sm btn-clear">Limpiar</a>
+            <% } %>
+          </div>
+        </form>
+
+        <%- include('../partials/pagination', { pagination, q, paginationPosition: 'header' }) %>
+
+        <% if (items.length === 0) { %>
+          <p class="empty-state">
+            <% if (q || kind || companyRuc) { %>
+              No hay resultados con esos filtros.
+            <% } else { %>
+              No hay ítems. <a href="/catalogo/crear">Registrar el primero</a>
+            <% } %>
+          </p>
+        <% } else { %>
+          <div class="table-wrap">
+            <table class="data-table">
+              <thead>
+                <tr>
+                  <th>Tipo</th>
+                  <th>Nombre</th>
+                  <th>Empresa</th>
+                  <th>Precio</th>
+                  <th>Stock</th>
+                  <th>Estado</th>
+                  <th class="col-actions">Acciones</th>
+                </tr>
+              </thead>
+              <tbody>
+                <% items.forEach(function(it) { %>
+                  <tr>
+                    <td><span class="badge badge-kind-<%= it.kind.toLowerCase() %>"><%= it.kind %></span></td>
+                    <td>
+                      <strong><%= it.nombre %></strong>
+                      <% if (it.descripcion) { %><br><span class="muted"><%= it.descripcion %></span><% } %>
+                    </td>
+                    <td class="muted"><%= it.companyRuc %></td>
+                    <td><%= it.precioUnitario.toFixed(2) %></td>
+                    <td class="muted">
+                      <% if (it.manejaSerie) { %>Series<% } else if (it.manejaStock) { %><%= it.stockActual ?? 0 %><% } else { %>—<% } %>
+                    </td>
+                    <td>
+                      <% if (it.activo) { %>
+                        <span class="badge badge-activo">Activo</span>
+                      <% } else { %>
+                        <span class="badge badge-inactivo">Inactivo</span>
+                      <% } %>
+                    </td>
+                    <td>
+                      <div class="actions-cell">
+                        <a href="/catalogo/<%= it.id %>/editar" class="btn-sm btn-edit">Editar</a>
+                        <% if (!it.activo) { %>
+                          <form method="POST" action="/catalogo/<%= it.id %>/activar" class="inline-form">
+                            <button type="submit" class="btn-sm btn-success">Activar</button>
+                          </form>
+                        <% } else { %>
+                          <form method="POST" action="/catalogo/<%= it.id %>/desactivar" class="inline-form">
+                            <button type="submit" class="btn-sm btn-warn">Desactivar</button>
+                          </form>
+                        <% } %>
+                        <form
+                          method="POST"
+                          action="/catalogo/<%= it.id %>/eliminar"
+                          class="inline-form"
+                          onsubmit="return confirm('¿Eliminar <%= it.nombre %>?');"
+                        >
+                          <button type="submit" class="btn-sm btn-danger">Eliminar</button>
+                        </form>
+                      </div>
+                    </td>
+                  </tr>
+                <% }); %>
+              </tbody>
+            </table>
+          </div>
+          <%- include('../partials/pagination', { pagination, q, paginationPosition: 'footer' }) %>
+        <% } %>
+      </section>
+    </div>
+  </main>
+</body>
+</html>

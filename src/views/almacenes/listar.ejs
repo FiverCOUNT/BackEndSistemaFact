@@ -1,0 +1,142 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title><%= title %> — BackEnd Easy</title>
+  <link rel="stylesheet" href="/css/style.css" />
+</head>
+<body>
+  <header class="header">
+    <h1>BackEnd Easy</h1>
+    <p>Panel web</p>
+  </header>
+
+  <main class="container layout-with-nav">
+    <%- include('../partials/nav', { active: 'almacenes' }) %>
+
+    <div class="main-content">
+      <section class="card">
+        <div class="card-header-row">
+          <div>
+            <h2><%= title %></h2>
+            <p class="api-hint"><%= total %> almacén(es) en total</p>
+          </div>
+          <a href="/almacenes/crear" class="btn-link">+ Nuevo almacén</a>
+        </div>
+
+        <%- include('../partials/flash', { flash }) %>
+
+        <form class="list-search" method="GET" action="<%= searchAction %>">
+          <div class="list-search-row">
+            <input
+              type="search"
+              name="q"
+              value="<%= q %>"
+              placeholder="<%= searchPlaceholder %>"
+              class="list-search-input"
+              autocomplete="off"
+            />
+            <select name="company" class="list-filter-select">
+              <option value="">Todas las empresas</option>
+              <% companies.forEach(function(c) { %>
+                <option value="<%= c.ruc %>" <%= companyRuc === c.ruc ? 'selected' : '' %>><%= c.nombre %></option>
+              <% }); %>
+            </select>
+            <button type="submit" class="btn-sm btn-edit">Buscar</button>
+            <% if (q || companyRuc) { %>
+              <a href="<%= searchAction %>" class="btn-sm btn-clear">Limpiar</a>
+            <% } %>
+          </div>
+        </form>
+
+        <%- include('../partials/pagination', { pagination, q, paginationPosition: 'header' }) %>
+
+        <% if (almacenes.length === 0) { %>
+          <p class="empty-state">
+            <% if (q || companyRuc) { %>
+              No hay resultados con esos filtros.
+            <% } else { %>
+              No hay almacenes. <a href="/almacenes/crear">Registrar el primero</a>
+            <% } %>
+          </p>
+        <% } else { %>
+          <div class="table-wrap">
+            <table class="data-table">
+              <thead>
+                <tr>
+                  <th>Código</th>
+                  <th>Nombre</th>
+                  <th>Empresa</th>
+                  <th>Dirección</th>
+                  <th>Usuarios</th>
+                  <th>Estado</th>
+                  <th class="col-actions">Acciones</th>
+                </tr>
+              </thead>
+              <tbody>
+                <% almacenes.forEach(function(a) { %>
+                  <tr>
+                    <td><code><%= a.codigo %></code></td>
+                    <td>
+                      <strong><%= a.nombre %></strong>
+                      <br><span class="muted"><%= a.id %></span>
+                    </td>
+                    <td>
+                      <% if (a.companyNombre) { %>
+                        <%= a.companyNombre %><br>
+                        <small class="muted">RUC <%= a.companyRuc %></small>
+                      <% } else { %>
+                        <span class="muted"><%= a.companyRuc %></span>
+                      <% } %>
+                    </td>
+                    <td class="muted">
+                      <% if (a.address && a.address.direccion) { %>
+                        <%= a.address.direccion %>
+                        <% if (a.address.distrito) { %><br><small><%= a.address.distrito %></small><% } %>
+                      <% } else { %>
+                        —
+                      <% } %>
+                    </td>
+                    <td class="muted"><%= a.usuariosCount %></td>
+                    <td>
+                      <% if (a.activo) { %>
+                        <span class="badge badge-activo">Activo</span>
+                      <% } else { %>
+                        <span class="badge badge-inactivo">Inactivo</span>
+                      <% } %>
+                    </td>
+                    <td>
+                      <div class="actions-cell">
+                        <a href="/almacenes/<%= a.id %>/editar" class="btn-sm btn-edit">Editar</a>
+                        <% if (!a.activo) { %>
+                          <form method="POST" action="/almacenes/<%= a.id %>/activar" class="inline-form">
+                            <button type="submit" class="btn-sm btn-success">Activar</button>
+                          </form>
+                        <% } else { %>
+                          <form method="POST" action="/almacenes/<%= a.id %>/desactivar" class="inline-form">
+                            <button type="submit" class="btn-sm btn-warn">Desactivar</button>
+                          </form>
+                        <% } %>
+                        <form
+                          method="POST"
+                          action="/almacenes/<%= a.id %>/eliminar"
+                          class="inline-form"
+                          onsubmit="return confirm('¿Eliminar almacén <%= a.nombre %>?');"
+                        >
+                          <button type="submit" class="btn-sm btn-danger">Eliminar</button>
+                        </form>
+                      </div>
+                    </td>
+                  </tr>
+                <% }); %>
+              </tbody>
+            </table>
+          </div>
+          <%- include('../partials/pagination', { pagination, q, paginationPosition: 'footer' }) %>
+        <% } %>
+      </section>
+    </div>
+  </main>
+</body>
+</html>

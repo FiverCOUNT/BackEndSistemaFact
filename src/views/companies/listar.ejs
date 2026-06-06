@@ -1,0 +1,104 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title><%= title %> — BackEnd Easy</title>
+  <link rel="stylesheet" href="/css/style.css" />
+</head>
+<body>
+  <header class="header">
+    <h1>BackEnd Easy</h1>
+    <p>Panel web</p>
+  </header>
+
+  <main class="container layout-with-nav">
+    <%- include('../partials/nav', { active: 'companies' }) %>
+
+    <div class="main-content">
+      <section class="card">
+        <div class="card-header-row">
+          <div>
+            <h2><%= title %></h2>
+            <p class="api-hint"><%= total %> empresa(s) en total</p>
+          </div>
+          <a href="/companies/crear" class="btn-link">+ Nueva empresa</a>
+        </div>
+
+        <%- include('../partials/flash', { flash }) %>
+        <%- include('../partials/list-search', { searchAction, searchPlaceholder, q, pageSize }) %>
+        <%- include('../partials/pagination', { pagination, q, paginationPosition: 'header' }) %>
+
+        <% if (companies.length === 0) { %>
+          <p class="empty-state">
+            <% if (q) { %>
+              No hay resultados para «<%= q %>».
+            <% } else { %>
+              No hay empresas. <a href="/companies/crear">Registrar la primera</a>
+            <% } %>
+          </p>
+        <% } else { %>
+          <div class="table-wrap">
+            <table class="data-table">
+              <thead>
+                <tr>
+                  <th>ID</th>
+                  <th>RUC</th>
+                  <th>Razón social</th>
+                  <th>Comercial</th>
+                  <th>Estado</th>
+                  <th>Usuarios</th>
+                  <th>Entorno</th>
+                  <th class="col-actions">Acciones</th>
+                </tr>
+              </thead>
+              <tbody>
+                <% companies.forEach(function(c) { %>
+                  <tr>
+                    <td><%= c.id %></td>
+                    <td><code><%= c.ruc %></code></td>
+                    <td><strong><%= c.nombre %></strong></td>
+                    <td><%= c.nombreComercial || '—' %></td>
+                    <td>
+                      <% if (c.activo !== false) { %>
+                        <span class="badge badge-activo">Activa</span>
+                      <% } else { %>
+                        <span class="badge badge-inactivo">Inactiva</span>
+                      <% } %>
+                    </td>
+                    <td><%= c.usuariosCount %></td>
+                    <td class="muted"><%= c.entorno || '—' %></td>
+                    <td>
+                      <div class="actions-cell">
+                        <a href="/companies/<%= c.id %>/editar" class="btn-sm btn-edit">Editar</a>
+                        <% if (c.activo === false) { %>
+                          <form method="POST" action="/companies/<%= c.id %>/activar" class="inline-form">
+                            <button type="submit" class="btn-sm btn-success">Activar</button>
+                          </form>
+                        <% } else { %>
+                          <form method="POST" action="/companies/<%= c.id %>/desactivar" class="inline-form">
+                            <button type="submit" class="btn-sm btn-warn">Desactivar</button>
+                          </form>
+                        <% } %>
+                        <form
+                          method="POST"
+                          action="/companies/<%= c.id %>/eliminar"
+                          class="inline-form"
+                          onsubmit="return confirm('¿Eliminar empresa <%= c.nombre %>?');"
+                        >
+                          <button type="submit" class="btn-sm btn-danger">Eliminar</button>
+                        </form>
+                      </div>
+                    </td>
+                  </tr>
+                <% }); %>
+              </tbody>
+            </table>
+          </div>
+          <%- include('../partials/pagination', { pagination, q, paginationPosition: 'footer' }) %>
+        <% } %>
+      </section>
+    </div>
+  </main>
+</body>
+</html>

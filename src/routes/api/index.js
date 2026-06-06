@@ -1,8 +1,10 @@
 const express = require('express');
-const itemRoutes = require('./itemRoutes');
+const authRoutes = require('./authRoutes');
+const empresaRoutes = require('./empresaRoutes');
 
 const router = express.Router();
 
-router.use('/items', itemRoutes);
+router.use('/auth', authRoutes);
+router.use('/empresas/:ruc', empresaRoutes);
 
 module.exports = router;

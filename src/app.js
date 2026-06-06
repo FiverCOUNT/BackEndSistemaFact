@@ -21,9 +21,7 @@ app.use((req, res) => {
   res.status(404).json({ success: false, message: 'Ruta no encontrada' });
 });
 
-app.use((err, req, res, next) => {
-  console.error(err);
-  res.status(500).json({ success: false, message: 'Error interno del servidor' });
-});
+const errorHandler = require('./middleware/errorHandler');
+app.use(errorHandler);
 
 module.exports = app;

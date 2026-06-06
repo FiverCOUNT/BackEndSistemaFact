@@ -1,12 +1,19 @@
+require('./config/env');
 const app = require('./app');
 const config = require('./config');
 const { initDatabase } = require('./models');
+
+
+
+
+
+
 
 initDatabase()
   .then(() => {
     app.listen(config.port, () => {
       console.log(`Servidor en http://localhost:${config.port}`);
-      console.log(`API REST: http://localhost:${config.port}/api/items`);
+      console.log(`API REST: http://localhost:${config.port}/api`);
     });
   })
   .catch((err) => {

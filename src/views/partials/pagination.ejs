@@ -1,0 +1,37 @@
+<% if (typeof pagination !== 'undefined' && pagination) { %>
+  <% const isFooter = typeof paginationPosition !== 'undefined' && paginationPosition === 'footer'; %>
+  <% const isHeader = !isFooter; %>
+
+  <% if (isHeader) { %>
+    <div class="list-meta">
+      <% if (pagination.total === 0) { %>
+        <span class="muted">Sin resultados<% if (q) { %> para «<%= q %>»<% } %></span>
+      <% } else { %>
+        <span class="muted">
+          Mostrando <%= pagination.from %>–<%= pagination.to %> de <%= pagination.total %>
+          <% if (q) { %> (filtrado)<% } %>
+        </span>
+      <% } %>
+    </div>
+  <% } %>
+
+  <% if (isFooter && pagination.totalPages > 1) { %>
+    <nav class="pagination" aria-label="Paginación">
+      <% if (pagination.hasPrev) { %>
+        <a href="<%= pagination.prevUrl %>" class="pagination-btn">← Anterior</a>
+      <% } else { %>
+        <span class="pagination-btn is-disabled">← Anterior</span>
+      <% } %>
+
+      <span class="pagination-info">
+        Página <%= pagination.page %> de <%= pagination.totalPages %>
+      </span>
+
+      <% if (pagination.hasNext) { %>
+        <a href="<%= pagination.nextUrl %>" class="pagination-btn">Siguiente →</a>
+      <% } else { %>
+        <span class="pagination-btn is-disabled">Siguiente →</span>
+      <% } %>
+    </nav>
+  <% } %>
+<% } %>

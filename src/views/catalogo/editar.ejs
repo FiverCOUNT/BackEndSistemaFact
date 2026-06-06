@@ -1,0 +1,38 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title><%= title %> — BackEnd Easy</title>
+  <link rel="stylesheet" href="/css/style.css" />
+</head>
+<body>
+  <header class="header">
+    <h1>BackEnd Easy</h1>
+    <p>Panel web</p>
+  </header>
+
+  <main class="container layout-with-nav">
+    <%- include('../partials/nav', { active: 'catalogo' }) %>
+    <div class="main-content">
+      <section class="card">
+        <div class="card-header-row">
+          <div>
+            <h2><%= title %></h2>
+            <p class="api-hint">ID <%= item.id %></p>
+          </div>
+          <a href="/catalogo" class="btn-link btn-secondary">← Volver</a>
+        </div>
+        <% if (error) { %><div class="message error"><%= error %></div><% } %>
+        <form class="form" method="POST" action="/catalogo/<%= item.id %>">
+          <%- include('_form', { form, companies, kinds, unidades }) %>
+          <div class="form-actions">
+            <button type="submit">Guardar cambios</button>
+            <a href="/catalogo" class="btn-link btn-secondary">Cancelar</a>
+          </div>
+        </form>
+      </section>
+    </div>
+  </main>
+</body>
+</html>

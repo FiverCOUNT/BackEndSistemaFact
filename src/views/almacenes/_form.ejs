@@ -1,0 +1,75 @@
+<div class="field">
+  <label for="companyRuc">Empresa (RUC) *</label>
+  <select id="companyRuc" name="companyRuc" required>
+    <option value="">— Seleccionar —</option>
+    <% companies.forEach(function(c) { %>
+      <option value="<%= c.ruc %>" <%= form.companyRuc === c.ruc ? 'selected' : '' %>>
+        <%= c.nombre %> (<%= c.ruc %>)
+      </option>
+    <% }); %>
+  </select>
+</div>
+
+<div class="form-grid">
+  <div class="field">
+    <label for="codigo">Código *</label>
+    <input
+      type="text"
+      id="codigo"
+      name="codigo"
+      value="<%= form.codigo || '' %>"
+      maxlength="32"
+      required
+      placeholder="ALM01"
+    />
+    <span class="field-hint">Único por empresa.</span>
+  </div>
+  <div class="field">
+    <label for="nombre">Nombre *</label>
+    <input
+      type="text"
+      id="nombre"
+      name="nombre"
+      value="<%= form.nombre || '' %>"
+      maxlength="255"
+      required
+      placeholder="Almacén Principal"
+    />
+  </div>
+</div>
+
+<fieldset class="fieldset">
+  <legend>Dirección (opcional)</legend>
+  <div class="form-grid">
+    <div class="field">
+      <label for="ubigeo">Ubigeo</label>
+      <input type="text" id="ubigeo" name="ubigeo" value="<%= form.ubigeo || '' %>" maxlength="6" />
+    </div>
+    <div class="field">
+      <label for="departamento">Departamento</label>
+      <input type="text" id="departamento" name="departamento" value="<%= form.departamento || '' %>" />
+    </div>
+    <div class="field">
+      <label for="provincia">Provincia</label>
+      <input type="text" id="provincia" name="provincia" value="<%= form.provincia || '' %>" />
+    </div>
+    <div class="field">
+      <label for="distrito">Distrito</label>
+      <input type="text" id="distrito" name="distrito" value="<%= form.distrito || '' %>" />
+    </div>
+    <div class="field field-full">
+      <label for="direccion">Dirección</label>
+      <input type="text" id="direccion" name="direccion" value="<%= form.direccion || '' %>" maxlength="500" />
+    </div>
+    <div class="field">
+      <label for="codLocal">Cód. local</label>
+      <input type="text" id="codLocal" name="codLocal" value="<%= form.codLocal || '0000' %>" maxlength="4" />
+    </div>
+  </div>
+</fieldset>
+
+<div class="form-grid" style="margin-top: 0.75rem;">
+  <div class="field field-check">
+    <label><input type="checkbox" name="activo" <%= form.activo !== false ? 'checked' : '' %> /> Activo</label>
+  </div>
+</div>

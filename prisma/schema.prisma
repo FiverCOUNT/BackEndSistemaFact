@@ -1,0 +1,411 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "mysql"
+  url      = env("DATABASE_URL")
+}
+
+enum EstadoUsuario {
+  ACTIVO
+  INACTIVO
+  PENDIENTE
+  BLOQUEADO
+}
+
+enum RolUsuario {
+  ADMIN
+  USUARIO
+}
+
+model Company {
+  id                       BigInt   @id @default(autoincrement())
+  ruc                      String   @default("") @db.VarChar(11)
+  nombre                   String   @db.VarChar(255)
+  nombreComercial          String?  @map("nombre_comercial") @db.VarChar(255)
+  tipoDoc                  String?  @map("tipo_doc") @db.VarChar(2)
+  numeroDoc                String?  @map("numero_doc") @db.VarChar(20)
+  addressId                String?  @unique @map("address_id") @db.VarChar(36)
+  address                  Address? @relation(fields: [addressId], references: [id], onDelete: SetNull)
+  email                    String?  @db.VarChar(255)
+  telefono                 String?  @db.VarChar(30)
+  telefonos                Json?
+  emails                   Json?
+  cuentasBancarias         Json?    @map("cuentas_bancarias")
+  billeterasDigitales      Json?    @map("billeteras_digitales")
+  mensajeAgradecimiento    String?  @map("mensaje_agradecimiento") @db.Text
+  mensajePromocional       String?  @map("mensaje_promocional") @db.Text
+  solUser                  String?  @map("sol_user") @db.VarChar(100)
+  solPass                  String?  @map("sol_pass") @db.VarChar(255)
+  clientId                 String?  @map("client_id") @db.VarChar(255)
+  clientSecret             String?  @map("client_secret") @db.VarChar(255)
+  rutaFirma                String?  @map("ruta_firma") @db.VarChar(500)
+  certificatePassword      String?  @map("certificate_password") @db.VarChar(255)
+  rutaLogo                 String?  @map("ruta_logo") @db.VarChar(500)
+  nameLogo                 String?  @map("name_logo") @db.VarChar(255)
+  entorno                  String?  @db.VarChar(20)
+  webhookUrl               String?  @map("webhook_url") @db.VarChar(500)
+  apiKey                   String?  @map("api_key") @db.VarChar(255)
+  apiSecret                String?  @map("api_secret") @db.VarChar(255)
+  plan                     String?  @db.VarChar(50)
+  taxRegime                String?  @map("tax_regime") @db.VarChar(50)
+  igvRateOverride          Decimal? @map("igv_rate_override") @db.Decimal(6, 4)
+  nrusCategoria            Int?     @map("nrus_categoria")
+  maxDocumentsMonth        Int?     @map("max_documents_month")
+  documentsThisMonth       Int?     @map("documents_this_month")
+  aiMessagesThisMonth      Int?     @map("ai_messages_this_month")
+  usageResetMonth          String?  @map("usage_reset_month") @db.VarChar(7)
+  userId                   BigInt?  @map("user_id")
+  sireEnabled              Boolean? @map("sire_enabled")
+  sireLastPeriodSynced     String?  @map("sire_last_period_synced") @db.VarChar(10)
+  sireLastReconciliationAt String?  @map("sire_last_reconciliation_at") @db.VarChar(30)
+  sireClientId             String?  @map("sire_client_id") @db.VarChar(255)
+  sireClientSecret         String?  @map("sire_client_secret") @db.VarChar(255)
+  activo                   Boolean?
+  isActive                 Boolean? @map("is_active")
+  tieneCertificado         Boolean? @map("tiene_certificado")
+  tieneWebhook             Boolean? @map("tiene_webhook")
+  creadoEn                 String?  @map("creado_en") @db.VarChar(30)
+
+  usuarios Usuario[]
+
+  @@index([ruc])
+  @@index([userId])
+  @@map("companies")
+}
+
+model Usuario {
+  id           Int           @id @default(autoincrement())
+  email        String        @unique @db.VarChar(255)
+  contrasena   String        @db.VarChar(255)
+  token        String?       @db.Text
+  refreshToken String?       @map("refresh_token") @db.Text
+  lastUpdated  BigInt        @map("last_updated")
+  estado       EstadoUsuario @default(ACTIVO)
+  rol          RolUsuario    @default(USUARIO)
+  companyId    BigInt?       @map("company_id")
+  company      Company?      @relation(fields: [companyId], references: [id], onDelete: SetNull)
+  almacenId    String?       @map("almacen_id") @db.VarChar(36)
+  almacen      Almacen?      @relation(fields: [almacenId], references: [id], onDelete: SetNull)
+
+  @@index([almacenId])
+  @@map("usuarios")
+}
+
+model SaleDetail {
+  id                String   @id @default(uuid()) @db.VarChar(36)
+  invoiceId         String?  @map("invoice_id") @db.VarChar(36)
+  catalogItemId     String?  @map("catalog_item_id") @db.VarChar(64)
+  descripcion       String?  @db.VarChar(500)
+  nombre            String?  @db.VarChar(255)
+  cantidad          Decimal  @db.Decimal(14, 4)
+  unidad            String?  @default("NIU") @db.VarChar(10)
+  mtoPrecioUnitario Decimal? @map("mto_precio_unitario") @db.Decimal(14, 4)
+  tipAfeIgv         String   @default("10") @map("tip_afe_igv") @db.VarChar(4)
+  mtoValorVenta     Decimal? @map("mto_valor_venta") @db.Decimal(14, 4)
+  mtoIgv            Decimal? @map("mto_igv") @db.Decimal(14, 4)
+  totalFactura      Decimal? @map("total") @db.Decimal(14, 4)
+  mtoValorUnitario  Decimal? @map("mto_valor_unitario") @db.Decimal(14, 4)
+  mtoBaseIgv        Decimal? @map("mto_base_igv") @db.Decimal(14, 4)
+  porcentajeIgv     Decimal? @map("porcentaje_igv") @db.Decimal(6, 2)
+  productoSerieId   String?  @map("producto_serie_id") @db.VarChar(36)
+  productoSerie     ProductoSerie? @relation(fields: [productoSerieId], references: [id], onDelete: SetNull)
+  catalogItem       CatalogItem?   @relation(fields: [catalogItemId], references: [id], onDelete: SetNull)
+  invoice           Invoice?       @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+
+  @@index([invoiceId])
+  @@index([productoSerieId])
+  @@index([catalogItemId])
+  @@map("sale_details")
+}
+
+enum ProductoSerieEstado {
+  DISPONIBLE
+  RESERVADO
+  VENDIDO
+  ENTREGADO
+  BAJA
+}
+
+model ProductoSerie {
+  id            String              @id @db.VarChar(36)
+  companyRuc    String              @map("company_ruc") @db.VarChar(11)
+  catalogItemId String              @map("catalog_item_id") @db.VarChar(64)
+  numeroSerie   String              @map("numero_serie") @db.VarChar(100)
+  almacenId     String?             @map("almacen_id") @db.VarChar(36)
+  estado        ProductoSerieEstado
+  comprobanteId String?             @map("comprobante_id") @db.VarChar(36)
+  entregaId     String?             @map("entrega_id") @db.VarChar(36)
+  saleDetails   SaleDetail[]
+  lineasCatalogo LineaCatalogoItem[]
+  inventario     Inventario?
+  catalogItem   CatalogItem @relation(fields: [catalogItemId], references: [id])
+  comprobante   Invoice?    @relation(fields: [comprobanteId], references: [id], onDelete: SetNull)
+  almacen       Almacen?    @relation(fields: [almacenId], references: [id], onDelete: SetNull)
+
+  @@unique([companyRuc, numeroSerie])
+  @@index([catalogItemId])
+  @@index([almacenId])
+  @@map("producto_series")
+}
+
+enum MovimientoTipo {
+  ENTRADA
+  SALIDA
+  AJUSTE
+}
+
+enum MovimientoEstado {
+  BORRADOR
+  DESPACHADA
+  ANULADA
+}
+
+/// Historial de entradas, salidas y traslados. No calcula stock:
+/// el saldo vivo está en [Inventario] y se actualiza al confirmar cada operación.
+model Movimiento {
+  id               String            @id @db.VarChar(36)
+  companyRuc       String            @map("company_ruc") @db.VarChar(11)
+  almacenId        String            @map("almacen_id") @db.VarChar(36)
+  tipo             MovimientoTipo
+  fecha            String            @db.VarChar(30)
+  observaciones    String?           @db.Text
+  referenciaTipo   String?           @map("referencia_tipo") @db.VarChar(50)
+  referenciaId     String?           @map("referencia_id") @db.VarChar(36)
+  numero           String?           @db.VarChar(50)
+  almacenDestinoId String?           @map("almacen_destino_id") @db.VarChar(36)
+  estado           MovimientoEstado?
+  comprobanteId    String?           @map("comprobante_id") @db.VarChar(36)
+  guiaRemisionId   String?           @map("guia_remision_id") @db.VarChar(36)
+  fechaDespacho    String?           @map("fecha_despacho") @db.VarChar(30)
+  lineas           LineaCatalogoItem[]
+  comprobante      Invoice?          @relation("MovimientoComprobante", fields: [comprobanteId], references: [id], onDelete: SetNull)
+  guiaRemision     Invoice?          @relation("MovimientoGuiaRemision", fields: [guiaRemisionId], references: [id], onDelete: SetNull)
+  almacen          Almacen           @relation("MovimientoAlmacenOrigen", fields: [almacenId], references: [id])
+  almacenDestino   Almacen?          @relation("MovimientoAlmacenDestino", fields: [almacenDestinoId], references: [id], onDelete: SetNull)
+
+  @@index([companyRuc])
+  @@index([almacenId])
+  @@index([almacenDestinoId])
+  @@index([comprobanteId])
+  @@map("movimientos")
+}
+
+model LineaCatalogoItem {
+  lineaId         String   @id @default(uuid()) @map("linea_id") @db.VarChar(36)
+  externalId      String?  @map("id") @db.VarChar(36)
+  movimientoId    String   @map("movimiento_id") @db.VarChar(36)
+  catalogItemId   String   @map("catalog_item_id") @db.VarChar(64)
+  nombre          String?  @db.VarChar(255)
+  codigo          String?  @db.VarChar(64)
+  descripcion     String?  @db.VarChar(500)
+  unidad          String?  @db.VarChar(10)
+  precioUnitario  Decimal? @map("precio_unitario") @db.Decimal(14, 4)
+  afectacionIgv   String?  @map("afectacion_igv") @db.VarChar(4)
+  kind            String?  @db.VarChar(50)
+  manejaStock     Boolean? @map("maneja_stock")
+  manejaSerie     Boolean? @map("maneja_serie")
+  cantidad        Decimal  @db.Decimal(14, 4)
+  almacenId       String?  @map("almacen_id") @db.VarChar(36)
+  productoSerieId String?  @map("producto_serie_id") @db.VarChar(36)
+  numerosSerieApi Json?    @map("series")
+  serieIds        Json?    @map("serie_ids")
+  numerosSerie    Json?    @map("numeros_serie")
+
+  movimiento    Movimiento     @relation(fields: [movimientoId], references: [id], onDelete: Cascade)
+  productoSerie ProductoSerie? @relation(fields: [productoSerieId], references: [id], onDelete: SetNull)
+  catalogItem   CatalogItem    @relation(fields: [catalogItemId], references: [id])
+  almacen       Almacen?       @relation(fields: [almacenId], references: [id], onDelete: SetNull)
+
+  @@index([movimientoId])
+  @@index([catalogItemId])
+  @@index([productoSerieId])
+  @@index([almacenId])
+  @@map("linea_catalogo_items")
+}
+
+enum CatalogItemKind {
+  PRODUCT
+  SERVICE
+}
+
+model CatalogItem {
+  id              String          @id @db.VarChar(36)
+  companyRuc      String          @map("company_ruc") @db.VarChar(11)
+  kind            CatalogItemKind
+  codigo          String?  @db.VarChar(64)
+  nombre          String   @db.VarChar(255)
+  descripcion     String?  @db.VarChar(500)
+  unidad          String   @db.VarChar(10)
+  precioUnitario  Decimal  @map("precio_unitario") @db.Decimal(14, 4)
+  afectacionIgv   String   @default("10") @map("afectacion_igv") @db.VarChar(4)
+  activo          Boolean  @default(true)
+  manejaStock     Boolean  @default(false) @map("maneja_stock")
+  manejaSerie     Boolean  @default(false) @map("maneja_serie")
+  stockActual     Decimal? @map("stock_actual") @db.Decimal(14, 4)
+  duracionMinutos Int?     @map("duracion_minutos")
+
+  productoSeries ProductoSerie[]
+  lineasCatalogo LineaCatalogoItem[]
+  saleDetails    SaleDetail[]
+  inventario     Inventario[]
+
+  @@index([companyRuc])
+  @@index([companyRuc, codigo])
+  @@map("catalog_items")
+}
+
+/// Fuente de verdad del stock por almacén (saldo actual).
+/// - Saldo por cantidad: `saldoKey` = catalogItemId:almacenId, `productoSerieId` null.
+/// - Unidad serializada: una fila por serie (`productoSerieId` único, cantidad = 1).
+/// [Movimiento] y [LineaCatalogoItem] solo registran historial; no se suman para consultar stock.
+model Inventario {
+  id              String   @id @default(uuid()) @db.VarChar(36)
+  companyRuc      String   @map("company_ruc") @db.VarChar(11)
+  catalogItemId   String   @map("catalog_item_id") @db.VarChar(36)
+  almacenId       String   @map("almacen_id") @db.VarChar(36)
+  productoSerieId String?  @unique @map("producto_serie_id") @db.VarChar(36)
+  saldoKey        String?  @unique @map("saldo_key") @db.VarChar(110)
+  cantidad        Decimal  @db.Decimal(14, 4)
+
+  catalogItem   CatalogItem    @relation(fields: [catalogItemId], references: [id], onDelete: Cascade)
+  almacen       Almacen        @relation(fields: [almacenId], references: [id], onDelete: Cascade)
+  productoSerie ProductoSerie? @relation(fields: [productoSerieId], references: [id], onDelete: Cascade)
+
+  @@index([catalogItemId, almacenId])
+  @@index([companyRuc])
+  @@index([almacenId])
+  @@map("inventario")
+}
+
+model Legend {
+  id        String   @id @default(uuid()) @db.VarChar(36)
+  invoiceId String?  @map("invoice_id") @db.VarChar(36)
+  code      String   @db.VarChar(10)
+  value     String   @db.Text
+  invoice   Invoice? @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+
+  @@index([invoiceId])
+  @@map("legends")
+}
+
+enum ComprobanteEstado {
+  BORRADOR
+  ENVIADO
+  ACEPTADO
+  RECHAZADO
+  ANULADO
+}
+
+model Cliente {
+  id          String  @id @db.VarChar(36)
+  companyRuc  String  @map("company_ruc") @db.VarChar(11)
+  tipoDoc     String  @map("tipo_doc") @db.VarChar(2)
+  numeroDoc   String  @map("numero_doc") @db.VarChar(20)
+  razonSocial String   @map("razon_social") @db.VarChar(255)
+  addressId   String?  @unique @map("address_id") @db.VarChar(36)
+  address     Address? @relation(fields: [addressId], references: [id], onDelete: SetNull)
+  telefono    String?  @db.VarChar(30)
+  activo      Boolean @default(true)
+  invoices    Invoice[]
+
+  @@unique([companyRuc, tipoDoc, numeroDoc])
+  @@index([companyRuc])
+  @@map("clientes")
+}
+
+model Address {
+  id           String  @id @default(uuid()) @db.VarChar(36)
+  ubigeo       String? @db.VarChar(6)
+  departamento String? @db.VarChar(100)
+  provincia    String? @db.VarChar(100)
+  distrito     String? @db.VarChar(100)
+  urbanizacion String? @db.VarChar(100)
+  direccion    String? @db.VarChar(500)
+  codLocal     String? @default("0000") @map("cod_local") @db.VarChar(4)
+
+  company Company?
+  cliente Cliente?
+  almacen Almacen?
+
+  @@map("addresses")
+}
+
+model Almacen {
+  id                 String   @id @db.VarChar(36)
+  companyRuc         String   @map("company_ruc") @db.VarChar(11)
+  codigo             String   @db.VarChar(32)
+  nombre             String   @db.VarChar(255)
+  addressId          String?  @unique @map("address_id") @db.VarChar(36)
+  activo             Boolean  @default(true)
+  address            Address? @relation(fields: [addressId], references: [id], onDelete: SetNull)
+
+  productoSeries     ProductoSerie[]
+  movimientosOrigen  Movimiento[]      @relation("MovimientoAlmacenOrigen")
+  movimientosDestino Movimiento[]      @relation("MovimientoAlmacenDestino")
+  lineasCatalogo     LineaCatalogoItem[]
+  usuarios           Usuario[]
+  inventario         Inventario[]
+
+  @@unique([companyRuc, codigo])
+  @@index([companyRuc])
+  @@map("almacenes")
+}
+
+model Invoice {
+  id                      String            @id @db.VarChar(36)
+  companyRuc              String            @default("") @map("company_ruc") @db.VarChar(11)
+  ublVersion              String            @default("2.1") @map("ubl_version") @db.VarChar(10)
+  tipoOperacion           String            @default("0101") @map("tipo_operacion") @db.VarChar(10)
+  tipoDoc                 String            @map("tipo_doc") @db.VarChar(4)
+  serie                   String            @db.VarChar(10)
+  correlativo             String            @db.VarChar(20)
+  fechaEmision            String?           @map("fecha_emision") @db.VarChar(30)
+  fecVencimiento          String?           @map("fec_vencimiento") @db.VarChar(30)
+  tipoMoneda              String            @default("PEN") @map("tipo_moneda") @db.VarChar(3)
+  formaPago               String?           @map("forma_pago") @db.VarChar(50)
+  observacion             String?           @db.Text
+  mtoOperGravadas         Decimal?          @map("mto_oper_gravadas") @db.Decimal(14, 4)
+  mtoOperExoneradas       Decimal?          @map("mto_oper_exoneradas") @db.Decimal(14, 4)
+  mtoOperInafectas        Decimal?          @map("mto_oper_inafectas") @db.Decimal(14, 4)
+  mtoOperExportacion      Decimal?          @map("mto_oper_exportacion") @db.Decimal(14, 4)
+  mtoIgv                  Decimal?          @map("mto_igv") @db.Decimal(14, 4)
+  totalImpuestos          Decimal?          @map("total_impuestos") @db.Decimal(14, 4)
+  subTotal                Decimal?          @map("sub_total") @db.Decimal(14, 4)
+  mtoImpVenta             Decimal?          @map("mto_imp_venta") @db.Decimal(14, 4)
+  totalesJson             Json?             @map("totales")
+  motivoCodigo            String?           @map("motivo_codigo") @db.VarChar(10)
+  motivoNota              String?           @map("motivo_nota") @db.VarChar(255)
+  documentoAfectadoId     String?           @map("documento_afectado_id") @db.VarChar(36)
+  estado                  ComprobanteEstado @default(BORRADOR)
+  cdrEstado               String?           @map("cdr_estado") @db.VarChar(50)
+  pdfUrl                  String?           @map("pdf_url") @db.VarChar(500)
+  cdrZipUrl               String?           @map("cdr_zip_url") @db.VarChar(500)
+  xmlUrlDirecto           String?           @map("xml_url") @db.VarChar(500)
+  archivosJson            Json?             @map("archivos")
+  sunatEstadoDirecto      String?           @map("sunat_estado") @db.VarChar(50)
+  sunatCodigoDirecto      String?           @map("sunat_codigo") @db.VarChar(20)
+  sunatDescripcionDirecto   String?           @map("sunat_descripcion") @db.Text
+  sunatNotasDirecto       Json?             @map("sunat_notas")
+  hashCpeDirecto          String?           @map("hash_cpe") @db.VarChar(128)
+  sunatJson               Json?             @map("sunat")
+  enviarAutomatico        Boolean?          @map("enviar_automatico")
+  clienteId               String?           @map("cliente_id") @db.VarChar(36)
+
+  cliente                 Cliente?          @relation(fields: [clienteId], references: [id], onDelete: SetNull)
+  documentoAfectado       Invoice?          @relation("DocumentoAfectado", fields: [documentoAfectadoId], references: [id], onDelete: SetNull)
+  notasQueAfectan         Invoice[]         @relation("DocumentoAfectado")
+  details                 SaleDetail[]
+  legends                 Legend[]
+  productoSeries          ProductoSerie[]
+  movimientosComprobante  Movimiento[]      @relation("MovimientoComprobante")
+  movimientosGuiaRemision Movimiento[]      @relation("MovimientoGuiaRemision")
+
+  @@unique([companyRuc, tipoDoc, serie, correlativo])
+  @@index([companyRuc])
+  @@index([tipoDoc])
+  @@index([documentoAfectadoId])
+  @@index([clienteId])
+  @@map("invoices")
+}

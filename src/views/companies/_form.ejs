@@ -1,0 +1,96 @@
+<fieldset class="fieldset">
+  <legend>Datos principales</legend>
+  <div class="form-grid">
+    <div class="field">
+      <label for="ruc">RUC *</label>
+      <input type="text" id="ruc" name="ruc" value="<%= form.ruc %>" maxlength="11" required />
+    </div>
+    <div class="field">
+      <label for="nombre">Razón social *</label>
+      <input type="text" id="nombre" name="nombre" value="<%= form.nombre %>" required />
+    </div>
+    <div class="field">
+      <label for="nombreComercial">Nombre comercial</label>
+      <input type="text" id="nombreComercial" name="nombreComercial" value="<%= form.nombreComercial %>" />
+    </div>
+    <div class="field">
+      <label for="tipoDoc">Tipo doc.</label>
+      <input type="text" id="tipoDoc" name="tipoDoc" value="<%= form.tipoDoc %>" maxlength="2" />
+    </div>
+    <div class="field">
+      <label for="numeroDoc">Número doc.</label>
+      <input type="text" id="numeroDoc" name="numeroDoc" value="<%= form.numeroDoc %>" />
+    </div>
+    <div class="field">
+      <label for="taxRegime">Régimen tributario</label>
+      <input type="text" id="taxRegime" name="taxRegime" value="<%= form.taxRegime %>" placeholder="RER, GENERAL..." />
+    </div>
+  </div>
+</fieldset>
+
+<fieldset class="fieldset">
+  <legend>Contacto</legend>
+  <div class="form-grid">
+    <div class="field">
+      <label for="email">Email</label>
+      <input type="email" id="email" name="email" value="<%= form.email %>" />
+    </div>
+    <div class="field">
+      <label for="telefono">Teléfono</label>
+      <input type="text" id="telefono" name="telefono" value="<%= form.telefono %>" />
+    </div>
+  </div>
+</fieldset>
+
+<fieldset class="fieldset">
+  <legend>Configuración</legend>
+  <div class="form-grid">
+    <div class="field">
+      <label for="entorno">Entorno</label>
+      <select id="entorno" name="entorno">
+        <option value="beta" <%= form.entorno === 'beta' ? 'selected' : '' %>>beta</option>
+        <option value="prod" <%= form.entorno === 'prod' ? 'selected' : '' %>>prod</option>
+      </select>
+    </div>
+    <div class="field">
+      <label for="plan">Plan</label>
+      <input type="text" id="plan" name="plan" value="<%= form.plan %>" placeholder="free, pro..." />
+    </div>
+    <div class="field field-check">
+      <label><input type="checkbox" name="activo" <%= form.activo ? 'checked' : '' %> /> Activa</label>
+    </div>
+    <div class="field field-check">
+      <label><input type="checkbox" name="isActive" <%= form.isActive ? 'checked' : '' %> /> isActive</label>
+    </div>
+  </div>
+</fieldset>
+
+<fieldset class="fieldset">
+  <legend>Dirección fiscal (opcional)</legend>
+  <div class="form-grid">
+    <div class="field">
+      <label for="ubigeo">Ubigeo</label>
+      <input type="text" id="ubigeo" name="ubigeo" value="<%= form.ubigeo %>" maxlength="6" />
+    </div>
+    <div class="field">
+      <label for="departamento">Departamento</label>
+      <input type="text" id="departamento" name="departamento" value="<%= form.departamento %>" />
+    </div>
+    <div class="field">
+      <label for="provincia">Provincia</label>
+      <input type="text" id="provincia" name="provincia" value="<%= form.provincia %>" />
+    </div>
+    <div class="field">
+      <label for="distrito">Distrito</label>
+      <input type="text" id="distrito" name="distrito" value="<%= form.distrito %>" />
+    </div>
+    <div class="field field-full">
+      <label for="direccion">Dirección</label>
+      <input type="text" id="direccion" name="direccion" value="<%= form.direccion %>" />
+    </div>
+    <div class="field">
+      <label for="codLocal">Cód. local</label>
+      <input type="text" id="codLocal" name="codLocal" value="<%= form.codLocal %>" maxlength="4" />
+    </div>
+  </div>
+</fieldset>

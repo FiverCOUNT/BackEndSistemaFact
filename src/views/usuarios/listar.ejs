@@ -1,0 +1,124 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title><%= title %> — BackEnd Easy</title>
+  <link rel="stylesheet" href="/css/style.css" />
+</head>
+<body>
+  <header class="header">
+    <h1>BackEnd Easy</h1>
+    <p>Panel web</p>
+  </header>
+
+  <main class="container layout-with-nav">
+    <%- include('../partials/nav', { active: 'usuarios' }) %>
+
+    <div class="main-content">
+    <section class="card">
+      <div class="card-header-row">
+        <div>
+          <h2><%= title %></h2>
+          <p class="api-hint"><%= total %> usuario(s) en total</p>
+        </div>
+        <a href="/usuarios/crear" class="btn-link">+ Nuevo usuario</a>
+      </div>
+
+      <%- include('../partials/flash', { flash }) %>
+      <%- include('../partials/list-search', { searchAction, searchPlaceholder, q, pageSize }) %>
+      <%- include('../partials/pagination', { pagination, q, paginationPosition: 'header' }) %>
+
+      <% if (usuarios.length === 0) { %>
+        <p class="empty-state">
+          <% if (q) { %>
+            No hay resultados para «<%= q %>».
+          <% } else { %>
+            No hay usuarios. <a href="/usuarios/crear">Crear el primero</a>
+          <% } %>
+        </p>
+      <% } else { %>
+        <div class="table-wrap">
+          <table class="data-table">
+            <thead>
+              <tr>
+                <th>ID</th>
+                <th>Email</th>
+                <th>Rol</th>
+                <th>Estado</th>
+                <th>Empresa</th>
+                <th>Almacén</th>
+                <th>Sesión</th>
+                <th>Actualizado</th>
+                <th class="col-actions">Acciones</th>
+              </tr>
+            </thead>
+            <tbody>
+              <% usuarios.forEach(function(u) { %>
+                <tr>
+                  <td><%= u.id %></td>
+                  <td><strong><%= u.email %></strong></td>
+                  <td>
+                    <span class="badge <%= u.rol === 'ADMIN' ? 'badge-activo' : '' %>"><%= u.rol %></span>
+                  </td>
+                  <td><span class="badge badge-<%= u.estado.toLowerCase() %>"><%= u.estado %></span></td>
+                  <td>
+                    <% if (u.companyNombre) { %>
+                      <%= u.companyNombre %><br />
+                      <small class="muted">RUC <%= u.companyRuc %></small>
+                    <% } else { %>
+                      <span class="muted">—</span>
+                    <% } %>
+                  </td>
+                  <td>
+                    <% if (u.almacenNombre) { %>
+                      <%= u.almacenNombre %>
+                      <% if (u.almacenCodigo) { %><br /><small class="muted"><%= u.almacenCodigo %></small><% } %>
+                    <% } else { %>
+                      <span class="muted">—</span>
+                    <% } %>
+                  </td>
+                  <td>
+                    <% if (u.hasSession) { %>
+                      <span class="badge badge-activo">Activa</span>
+                    <% } else { %>
+                      <span class="muted">Sin token</span>
+                    <% } %>
+                  </td>
+                  <td class="muted"><%= u.lastUpdated %></td>
+                  <td>
+                    <div class="actions-cell">
+                      <a href="/usuarios/<%= u.id %>/editar" class="btn-sm btn-edit">Editar</a>
+
+                      <% if (u.estado !== 'ACTIVO') { %>
+                        <form method="POST" action="/usuarios/<%= u.id %>/activar" class="inline-form">
+                          <button type="submit" class="btn-sm btn-success">Activar</button>
+                        </form>
+                      <% } else { %>
+                        <form method="POST" action="/usuarios/<%= u.id %>/desactivar" class="inline-form">
+                          <button type="submit" class="btn-sm btn-warn">Desactivar</button>
+                        </form>
+                      <% } %>
+
+                      <form
+                        method="POST"
+                        action="/usuarios/<%= u.id %>/eliminar"
+                        class="inline-form"
+                        onsubmit="return confirm('¿Eliminar usuario <%= u.email %>? Esta acción no se puede deshacer.');"
+                      >
+                        <button type="submit" class="btn-sm btn-danger">Eliminar</button>
+                      </form>
+                    </div>
+                  </td>
+                </tr>
+              <% }); %>
+            </tbody>
+          </table>
+        </div>
+        <%- include('../partials/pagination', { pagination, q, paginationPosition: 'footer' }) %>
+      <% } %>
+    </section>
+    </div>
+  </main>
+</body>
+</html>

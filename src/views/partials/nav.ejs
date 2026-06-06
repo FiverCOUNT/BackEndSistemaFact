@@ -1,0 +1,72 @@
+<nav class="nav-menu" aria-label="Menú principal">
+  <a href="/" class="nav-home <%= active === 'inicio' ? 'active' : '' %>">
+    <span class="nav-icon" aria-hidden="true">⌂</span>
+    Inicio
+  </a>
+
+  <div class="nav-sections">
+    <div class="nav-section <%= active && active.startsWith('usuarios') ? 'is-open' : '' %>">
+      <span class="nav-section-head">
+        <span class="nav-icon" aria-hidden="true">👤</span>
+        Usuarios
+      </span>
+      <div class="nav-sub">
+        <a href="/usuarios" class="<%= active === 'usuarios' ? 'active' : '' %>">Listado</a>
+        <a href="/usuarios/crear" class="<%= active === 'usuarios-crear' ? 'active' : '' %>">Nuevo usuario</a>
+      </div>
+    </div>
+
+    <div class="nav-section <%= active && active.startsWith('companies') ? 'is-open' : '' %>">
+      <span class="nav-section-head">
+        <span class="nav-icon" aria-hidden="true">🏢</span>
+        Empresas
+      </span>
+      <div class="nav-sub">
+        <a href="/companies" class="<%= active === 'companies' ? 'active' : '' %>">Listado</a>
+        <a href="/companies/crear" class="<%= active === 'companies-crear' ? 'active' : '' %>">Nueva empresa</a>
+      </div>
+    </div>
+
+    <div class="nav-section <%= active && active.startsWith('almacenes') ? 'is-open' : '' %>">
+      <span class="nav-section-head">
+        <span class="nav-icon" aria-hidden="true">🏭</span>
+        Almacenes
+      </span>
+      <div class="nav-sub">
+        <a href="/almacenes" class="<%= active === 'almacenes' ? 'active' : '' %>">Listado</a>
+        <a href="/almacenes/crear" class="<%= active === 'almacenes-crear' ? 'active' : '' %>">Nuevo almacén</a>
+      </div>
+    </div>
+
+    <div class="nav-section <%= active && active.startsWith('catalogo') ? 'is-open' : '' %>">
+      <span class="nav-section-head">
+        <span class="nav-icon" aria-hidden="true">📦</span>
+        Catálogo
+      </span>
+      <div class="nav-sub">
+        <a href="/catalogo" class="<%= active === 'catalogo' ? 'active' : '' %>">Listado</a>
+        <a href="/catalogo/crear" class="<%= active === 'catalogo-crear' ? 'active' : '' %>">Nuevo ítem</a>
+      </div>
+    </div>
+
+    <div class="nav-section <%= active && active.startsWith('comprobantes') ? 'is-open' : '' %>">
+      <span class="nav-section-head">
+        <span class="nav-icon" aria-hidden="true">📄</span>
+        Comprobantes
+      </span>
+      <div class="nav-sub">
+        <a href="/comprobantes" class="<%= active === 'comprobantes' ? 'active' : '' %>">Listado</a>
+      </div>
+    </div>
+
+    <div class="nav-section <%= active && active.startsWith('clientes') ? 'is-open' : '' %>">
+      <span class="nav-section-head">
+        <span class="nav-icon" aria-hidden="true">👥</span>
+        Clientes
+      </span>
+      <div class="nav-sub">
+        <a href="/clientes" class="<%= active === 'clientes' ? 'active' : '' %>">Listado</a>
+      </div>
+    </div>
+  </div>
+</nav>
