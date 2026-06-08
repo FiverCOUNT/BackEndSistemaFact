@@ -11,8 +11,8 @@
     "db:studio": "node scripts/with-env.js studio",
     "db:seed": "node prisma/seed.js",
     "start": "node src/server.js",
-    "dev": "node scripts/with-env.js db push && node --watch src/server.js",
-    "dev:server": "node --watch src/server.js",
+    "dev": "node scripts/dev-server.js",
+    "dev:server": "node scripts/dev-server.js",
     "db:generate": "node scripts/with-env.js generate"
   },
   "keywords": [

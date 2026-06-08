@@ -10,11 +10,15 @@ function buildAccessToken(user) {
     sub: user.id,
     email: user.email,
     companyId: user.companyId ? Number(user.companyId) : null,
+    companyRuc: user.company?.ruc ?? null,
+    rol: user.rol || 'USUARIO',
+    almacenId: user.almacenId != null ? String(user.almacenId) : null,
   });
 }
 
 async function login({ email, contrasena }) {
-  const user = await usuarioModel.findByEmail(email);
+  const normalizedEmail = (email || '').trim().toLowerCase();
+  const user = await usuarioModel.findByEmail(normalizedEmail);
   if (!user) {
     const err = new Error('Credenciales inválidas');
     err.status = 401;
@@ -69,24 +73,53 @@ async function issueTokens(user) {
     refreshToken,
   });
 
-  const updated = await usuarioModel.findById(user.id);
+  return sessionPayload(await usuarioModel.findById(user.id));
+}
+
+function sessionPayload(updated) {
+  if (!updated) {
+    const err = new Error('Usuario no encontrado');
+    err.status = 404;
+    throw err;
+  }
+
+  const almacenId =
+    updated.almacenId != null ? String(updated.almacenId) : null;
+  const almacenNombre = updated.almacen?.nombre ?? null;
+  const almacenCodigo = updated.almacen?.codigo ?? null;
 
   return {
-    accessToken,
-    refreshToken,
+    accessToken: updated.token,
+    refreshToken: updated.refreshToken,
     tokenType: 'Bearer',
+    almacenId,
+    almacenNombre,
+    almacenCodigo,
     user: {
       ...usuarioModel.toPublicUser(updated),
+      company: updated.company
+        ? {
+            ruc: updated.company.ruc,
+            nombre: updated.company.nombre || 'Empresa',
+          }
+        : null,
       companyRuc: updated.company?.ruc ?? null,
       companyNombre: updated.company?.nombre ?? null,
       rol: updated.rol,
-      almacenId: updated.almacenId ?? null,
-      almacenNombre: updated.almacen?.nombre ?? null,
+      almacenId,
+      almacenNombre,
+      almacenCodigo,
     },
   };
+}
+
+async function sessionFromUserId(userId) {
+  const user = await usuarioModel.findById(userId);
+  return sessionPayload(user);
 }
 
 module.exports = {
   login,
   refresh,
+  sessionFromUserId,
 };

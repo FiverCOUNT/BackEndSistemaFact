@@ -1,5 +1,11 @@
 const inventarioModel = require('../models/inventarioModel');
+const movimientoModel = require('../models/movimientoModel');
 const { resolveCatalogQuery } = require('../utils/catalogAccess');
+const {
+  normalizeAlmacenId,
+  resolveAlmacenFromBody,
+  resolveAlmacenFromQuery,
+} = require('../utils/almacenAccess');
 
 async function list(req, res, next) {
   try {
@@ -27,7 +33,7 @@ async function getById(req, res, next) {
       return res.status(404).json({ success: false, message: 'Registro de inventario no encontrado' });
     }
 
-    if (req.userRol !== 'ADMIN' && row.almacen_id !== req.userAlmacenId) {
+    if (req.userRol !== 'ADMIN' && row.almacen_id !== normalizeAlmacenId(req.userAlmacenId)) {
       return res.status(403).json({ success: false, message: 'No puede consultar otro almacén' });
     }
 
@@ -40,13 +46,13 @@ async function getById(req, res, next) {
 async function setSaldo(req, res, next) {
   try {
     const catalogItemId = (req.body.catalog_item_id || req.body.catalogItemId || '').trim();
-    const almacenId = (req.body.almacen_id || req.body.almacenId || '').trim();
+    const almacenId = resolveAlmacenFromBody(req, { required: true, defaultToUser: false });
     const cantidad = req.body.cantidad ?? req.body.cantidad_nueva;
 
-    if (!catalogItemId || !almacenId) {
+    if (!catalogItemId) {
       return res.status(400).json({
         success: false,
-        message: 'catalog_item_id y almacen_id son obligatorios',
+        message: 'catalog_item_id es obligatorio',
       });
     }
 
@@ -91,13 +97,13 @@ async function setSaldo(req, res, next) {
 async function adjustSaldo(req, res, next) {
   try {
     const catalogItemId = (req.body.catalog_item_id || req.body.catalogItemId || '').trim();
-    const almacenId = (req.body.almacen_id || req.body.almacenId || '').trim();
+    const almacenId = resolveAlmacenFromBody(req, { required: true, defaultToUser: false });
     const delta = req.body.delta ?? req.body.cantidad_delta;
 
-    if (!catalogItemId || !almacenId) {
+    if (!catalogItemId) {
       return res.status(400).json({
         success: false,
-        message: 'catalog_item_id y almacen_id son obligatorios',
+        message: 'catalog_item_id es obligatorio',
       });
     }
 
@@ -143,4 +149,87 @@ async function adjustSaldo(req, res, next) {
   }
 }
 
-module.exports = { list, getById, setSaldo, adjustSaldo };
+async function listMovimientos(req, res, next) {
+  try {
+    const tipo = (req.query.tipo || '').trim().toUpperCase() || null;
+
+    if (req.userRol !== 'ADMIN' && !req.userAlmacenId) {
+      return res.json([]);
+    }
+
+    const almacenId = resolveAlmacenFromQuery(req, { required: false });
+
+    const items = await movimientoModel.findMany({
+      companyRuc: req.companyRuc,
+      tipo,
+      almacenId,
+    });
+
+    res.json(items);
+  } catch (err) {
+    next(err);
+  }
+}
+
+async function registrarEntrada(req, res, next) {
+  try {
+    const almacenId = resolveAlmacenFromBody(req, { required: true, defaultToUser: true });
+    const lineas = req.body.lineas || [];
+    const observaciones = req.body.observaciones ?? null;
+
+    const result = await movimientoModel.registrarEntrada({
+      companyRuc: req.companyRuc,
+      almacenId,
+      lineas,
+      observaciones,
+    });
+
+    if (result.error === 'almacen_not_found') {
+      return res.status(404).json({ success: false, message: 'Almacén no encontrado' });
+    }
+    if (result.error === 'lineas_vacias') {
+      return res.status(400).json({ success: false, message: 'Debe incluir al menos una línea' });
+    }
+    if (result.error === 'item_not_found') {
+      return res.status(404).json({ success: false, message: 'Producto no encontrado' });
+    }
+    if (result.error === 'item_inactivo') {
+      return res.status(400).json({ success: false, message: 'Producto inactivo' });
+    }
+    if (result.error === 'series_requeridas') {
+      return res.status(400).json({
+        success: false,
+        message: 'Producto serializado: indique los números de serie',
+      });
+    }
+    if (result.error === 'cantidad_series') {
+      return res.status(400).json({
+        success: false,
+        message: 'La cantidad debe coincidir con el número de series',
+      });
+    }
+    if (result.error === 'cantidad_invalida') {
+      return res.status(400).json({ success: false, message: 'Cantidad inválida' });
+    }
+    if (result.error === 'serie_duplicada_linea') {
+      return res.status(400).json({
+        success: false,
+        message: `Serie duplicada en la misma línea: ${result.numeroSerie}`,
+      });
+    }
+    if (result.error === 'serie_existente') {
+      return res.status(409).json({
+        success: false,
+        message: result.numeroSerie
+          ? `La serie ${result.numeroSerie} ya está registrada`
+          : 'Uno de los números de serie ya está registrado',
+      });
+    }
+
+    res.status(201).json(result.movimiento);
+  } catch (err) {
+    next(err);
+  }
+}
+
+module.exports = { list, getById, setSaldo, adjustSaldo, listMovimientos, registrarEntrada };

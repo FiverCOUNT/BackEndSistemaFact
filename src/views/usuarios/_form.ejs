@@ -45,7 +45,7 @@
     <% }); %>
   </select>
   <span class="field-hint" id="rol-hint">
-    Administrador: acceso total. Usuario: solo catálogo de su almacén en la app.
+    Administrador: acceso total (puede ver otros almacenes). Usuario: solo su almacén en la app.
   </span>
 </div>
 
@@ -60,7 +60,7 @@
 
 <div class="field">
   <label for="companyId">Empresa</label>
-  <select id="companyId" name="companyId">
+  <select id="companyId" name="companyId" required>
     <option value="">— Sin empresa —</option>
     <% companies.forEach(function(c) { %>
       <option
@@ -72,12 +72,12 @@
       </option>
     <% }); %>
   </select>
-  <span class="field-hint" id="company-hint">Obligatoria para el rol Usuario.</span>
+  <span class="field-hint" id="company-hint">Obligatoria. Define la empresa del usuario.</span>
 </div>
 
 <div class="field" id="almacen-field">
   <label for="almacenId">Almacén</label>
-  <select id="almacenId" name="almacenId">
+  <select id="almacenId" name="almacenId" required>
     <option value="">— Seleccionar almacén —</option>
     <% almacenes.forEach(function(a) { %>
       <option
@@ -89,12 +89,11 @@
       </option>
     <% }); %>
   </select>
-  <span class="field-hint">Solo aplica al rol Usuario. Debe pertenecer a la empresa seleccionada.</span>
+  <span class="field-hint">Obligatorio para Admin y Usuario. Almacén principal de trabajo en la app móvil.</span>
 </div>
 
 <script>
 (function () {
-  var rol = document.getElementById('rol');
   var company = document.getElementById('companyId');
   var almacenField = document.getElementById('almacen-field');
   var almacen = document.getElementById('almacenId');
@@ -106,15 +105,16 @@
   }
 
   function syncForm() {
-    var isUsuario = rol.value === 'USUARIO';
-    almacenField.style.display = isUsuario ? '' : 'none';
-    if (!isUsuario) {
+    var ruc = selectedCompanyRuc();
+    var hasCompany = Boolean(ruc);
+    almacenField.style.display = hasCompany ? '' : 'none';
+    almacen.required = hasCompany;
+    if (!hasCompany) {
       almacen.value = '';
       return;
     }
-    var ruc = selectedCompanyRuc();
     options.forEach(function (opt) {
-      var match = !ruc || opt.getAttribute('data-company-ruc') === ruc;
+      var match = opt.getAttribute('data-company-ruc') === ruc;
       opt.hidden = !match;
       opt.disabled = !match;
     });
@@ -124,7 +124,6 @@
     }
   }
 
-  rol.addEventListener('change', syncForm);
   company.addEventListener('change', syncForm);
   syncForm();
 })();

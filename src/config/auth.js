@@ -11,7 +11,7 @@ if (process.env.NODE_ENV === 'production' && JWT_SECRET.includes('cambiar')) {
 module.exports = {
   jwtSecret: JWT_SECRET,
   jwtRefreshSecret: JWT_REFRESH_SECRET,
-  accessExpiresIn: process.env.JWT_ACCESS_EXPIRES || '15m',
+  accessExpiresIn: process.env.JWT_ACCESS_EXPIRES || '8h',
   refreshExpiresIn: process.env.JWT_REFRESH_EXPIRES || '7d',
   refreshExpiresMs: 7 * 24 * 60 * 60 * 1000,
 };

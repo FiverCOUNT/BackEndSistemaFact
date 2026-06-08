@@ -91,9 +91,12 @@ function parseBody(body) {
     afectacionIgv: (body.afectacionIgv || body.afectacion_igv || '10').trim(),
     activo: parseBool(body.activo, true),
     manejaStock:
-      body.manejaStock === 'on' ||
-      body.manejaStock === 'true' ||
-      body.maneja_stock === true,
+      body.manejaStock === false || body.maneja_stock === false
+        ? false
+        : body.manejaStock === 'on' ||
+          body.manejaStock === 'true' ||
+          body.maneja_stock === true ||
+          isProduct,
     manejaSerie:
       body.manejaSerie === 'on' ||
       body.manejaSerie === 'true' ||
@@ -206,6 +209,8 @@ async function findByCodigoExceptId(companyRuc, codigo, id) {
 
 async function create(body, id = randomUUID()) {
   const data = parseBody(body);
+  const manejaSerie = data.kind === 'PRODUCT' ? data.manejaSerie : false;
+  const manejaStock = data.kind === 'PRODUCT' ? data.manejaStock || manejaSerie : false;
   const row = await prisma.catalogItem.create({
     data: {
       id,
@@ -218,8 +223,8 @@ async function create(body, id = randomUUID()) {
       precioUnitario: data.precioUnitario,
       afectacionIgv: data.afectacionIgv,
       activo: data.activo,
-      manejaStock: data.kind === 'PRODUCT' ? data.manejaStock : false,
-      manejaSerie: data.kind === 'PRODUCT' ? data.manejaSerie : false,
+      manejaStock,
+      manejaSerie,
       stockActual: null,
       duracionMinutos: data.kind === 'SERVICE' ? data.duracionMinutos : null,
     },
@@ -229,6 +234,8 @@ async function create(body, id = randomUUID()) {
 
 async function update(id, body) {
   const data = parseBody(body);
+  const manejaSerie = data.kind === 'PRODUCT' ? data.manejaSerie : false;
+  const manejaStock = data.kind === 'PRODUCT' ? data.manejaStock || manejaSerie : false;
   return prisma.catalogItem.update({
     where: { id },
     data: {
@@ -241,8 +248,8 @@ async function update(id, body) {
       precioUnitario: data.precioUnitario,
       afectacionIgv: data.afectacionIgv,
       activo: data.activo,
-      manejaStock: data.kind === 'PRODUCT' ? data.manejaStock : false,
-      manejaSerie: data.kind === 'PRODUCT' ? data.manejaSerie : false,
+      manejaStock,
+      manejaSerie,
       stockActual: null,
       duracionMinutos: data.kind === 'SERVICE' ? data.duracionMinutos : null,
     },

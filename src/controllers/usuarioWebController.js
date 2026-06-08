@@ -62,21 +62,17 @@ async function validateUsuarioForm(form) {
     ? companies.find((c) => Number(c.id) === companyId)
     : null;
 
-  if (form.rol === 'USUARIO') {
-    if (!companyId || !company) {
-      return 'El rol Usuario requiere una empresa asignada.';
-    }
-    if (!form.almacenId) {
-      return 'El rol Usuario requiere un almacén asignado.';
-    }
-    const almacen = almacenes.find((a) => a.id === form.almacenId);
-    if (!almacen || almacen.companyRuc !== company.ruc) {
-      return 'El almacén debe pertenecer a la empresa seleccionada.';
-    }
+  if (!companyId || !company) {
+    return 'La empresa es obligatoria.';
   }
 
-  if (form.rol === 'ADMIN' && form.almacenId) {
-    return 'Un administrador no debe tener almacén asignado.';
+  if (!form.almacenId) {
+    return 'El almacén es obligatorio.';
+  }
+
+  const almacen = almacenes.find((a) => a.id === form.almacenId);
+  if (!almacen || almacen.companyRuc !== company.ruc) {
+    return 'El almacén debe pertenecer a la empresa seleccionada.';
   }
 
   return null;
@@ -173,7 +169,7 @@ async function create(req, res, next) {
       companyId,
       estado: form.estado,
       rol: form.rol,
-      almacenId: form.rol === 'USUARIO' ? form.almacenId : null,
+      almacenId: form.almacenId,
     });
 
     return redirectList(res, `Usuario ${form.email} creado correctamente.`);
@@ -255,7 +251,7 @@ async function update(req, res, next) {
       companyId,
       estado: form.estado,
       rol: form.rol,
-      almacenId: form.rol === 'USUARIO' ? form.almacenId : null,
+      almacenId: form.almacenId,
     };
 
     if (nuevaContrasena.length >= 6) {

@@ -1,3 +1,4 @@
+const { randomUUID } = require('crypto');
 require('../src/config/env');
 const { PrismaClient } = require('@prisma/client');
 const bcrypt = require('bcryptjs');
@@ -22,6 +23,7 @@ const IDS = {
   catalogServicio: 'd1000001-0001-4000-8000-000000000002',
   catalogMouse: 'd1000001-0001-4000-8000-000000000003',
   catalogTeclado: 'd1000001-0001-4000-8000-000000000004',
+  catalogProductoSeries: 'd1000001-0001-4000-8000-000000000005',
   serieLaptop: 'e1000001-0001-4000-8000-000000000001',
   serieLaptop2: 'e1000001-0001-4000-8000-000000000002',
   invMousePrincipal: 'i1000001-0001-4000-8000-000000000001',
@@ -135,6 +137,7 @@ async function main() {
       estado: 'ACTIVO',
       rol: 'ADMIN',
       companyId: company.id,
+      almacenId: IDS.almacenPrincipal,
     },
   });
 
@@ -266,6 +269,18 @@ async function main() {
         unidad: 'NIU',
         precioUnitario: 89.9,
         manejaStock: true,
+        stockActual: null,
+      },
+      {
+        id: IDS.catalogProductoSeries,
+        companyRuc: DEMO_RUC,
+        kind: 'PRODUCT',
+        nombre: 'Producto Series',
+        descripcion: 'Producto demo con números de serie',
+        unidad: 'NIU',
+        precioUnitario: 199,
+        manejaStock: true,
+        manejaSerie: true,
         stockActual: null,
       },
     ],
@@ -422,6 +437,54 @@ async function main() {
       cantidad: 1,
     },
   });
+
+  console.log('Insertando 20 series de Producto Series (10 por almacén)...');
+  for (let i = 1; i <= 10; i += 1) {
+    const serieId = randomUUID();
+    const numeroSerie = `PS-SERIES-${String(i).padStart(3, '0')}`;
+    await prisma.productoSerie.create({
+      data: {
+        id: serieId,
+        companyRuc: DEMO_RUC,
+        catalogItemId: IDS.catalogProductoSeries,
+        numeroSerie,
+        almacenId: IDS.almacenPrincipal,
+        estado: 'DISPONIBLE',
+      },
+    });
+    await prisma.inventario.create({
+      data: {
+        companyRuc: DEMO_RUC,
+        catalogItemId: IDS.catalogProductoSeries,
+        almacenId: IDS.almacenPrincipal,
+        productoSerieId: serieId,
+        cantidad: 1,
+      },
+    });
+  }
+  for (let i = 11; i <= 20; i += 1) {
+    const serieId = randomUUID();
+    const numeroSerie = `PS-SERIES-${String(i).padStart(3, '0')}`;
+    await prisma.productoSerie.create({
+      data: {
+        id: serieId,
+        companyRuc: DEMO_RUC,
+        catalogItemId: IDS.catalogProductoSeries,
+        numeroSerie,
+        almacenId: IDS.almacenSecundario,
+        estado: 'DISPONIBLE',
+      },
+    });
+    await prisma.inventario.create({
+      data: {
+        companyRuc: DEMO_RUC,
+        catalogItemId: IDS.catalogProductoSeries,
+        almacenId: IDS.almacenSecundario,
+        productoSerieId: serieId,
+        cantidad: 1,
+      },
+    });
+  }
 
   console.log('Insertando movimiento y líneas...');
   await prisma.movimiento.create({

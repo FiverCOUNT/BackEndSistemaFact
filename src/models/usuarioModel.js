@@ -10,7 +10,7 @@ function toPublicUser(user) {
     estado: user.estado,
     rol: user.rol,
     companyId: user.companyId ? user.companyId.toString() : null,
-    almacenId: user.almacenId || null,
+    almacenId: user.almacenId != null ? String(user.almacenId) : null,
     almacenNombre: user.almacen?.nombre ?? null,
     almacenCodigo: user.almacen?.codigo ?? null,
     lastUpdated: user.lastUpdated.toString(),
@@ -18,13 +18,26 @@ function toPublicUser(user) {
 }
 
 async function findByEmail(email) {
-  return prisma.usuario.findUnique({
-    where: { email },
-    include: {
-      company: { select: { id: true, nombre: true, ruc: true } },
-      almacen: { select: { id: true, nombre: true, codigo: true, companyRuc: true } },
-    },
+  const trimmed = (email || '').trim();
+  const normalized = trimmed.toLowerCase();
+  const include = {
+    company: { select: { id: true, nombre: true, ruc: true } },
+    almacen: { select: { id: true, nombre: true, codigo: true, companyRuc: true } },
+  };
+
+  let user = await prisma.usuario.findUnique({
+    where: { email: normalized },
+    include,
   });
+
+  if (!user && trimmed !== normalized) {
+    user = await prisma.usuario.findUnique({
+      where: { email: trimmed },
+      include,
+    });
+  }
+
+  return user;
 }
 
 async function findByEmailExceptId(email, id) {

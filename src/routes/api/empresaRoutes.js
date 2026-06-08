@@ -12,6 +12,10 @@ router.use(requireAuth);
 router.use(requireCompanyRuc);
 
 router.get('/catalogo', catalogItemApiController.list);
+router.get(
+  '/catalogo/:catalogItemId/series-disponibles',
+  catalogItemApiController.listSeriesDisponibles,
+);
 router.post('/catalogo', requireAdmin, catalogItemApiController.create);
 router.put('/catalogo/:id', requireAdmin, catalogItemApiController.update);
 router.patch('/catalogo/:id', requireAdmin, catalogItemApiController.patch);
@@ -20,6 +24,8 @@ router.delete('/catalogo/:id', requireAdmin, catalogItemApiController.destroy);
 router.get('/almacenes', almacenApiController.list);
 router.post('/almacenes', requireAdmin, almacenApiController.create);
 
+router.post('/inventario/entradas', inventarioApiController.registrarEntrada);
+router.get('/inventario/movimientos', inventarioApiController.listMovimientos);
 router.get('/inventario', inventarioApiController.list);
 router.get('/inventario/:id', inventarioApiController.getById);
 router.put('/inventario/saldos', requireAdmin, inventarioApiController.setSaldo);

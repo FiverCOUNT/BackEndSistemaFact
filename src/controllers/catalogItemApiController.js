@@ -1,4 +1,6 @@
 const catalogItemModel = require('../models/catalogItemModel');
+const productoSerieModel = require('../models/productoSerieModel');
+const prisma = require('../config/prisma');
 const { resolveCatalogQuery } = require('../utils/catalogAccess');
 
 async function list(req, res, next) {
@@ -9,6 +11,46 @@ async function list(req, res, next) {
       restrictToAlmacen,
     });
     res.json(items);
+  } catch (err) {
+    next(err);
+  }
+}
+
+async function listSeriesDisponibles(req, res, next) {
+  try {
+    const { catalogItemId } = req.params;
+    const { almacenId } = resolveCatalogQuery(req);
+
+    if (!almacenId) {
+      return res.status(400).json({
+        success: false,
+        message: 'Query almacen_id es obligatorio',
+      });
+    }
+
+    const item = await catalogItemModel.findById(catalogItemId);
+    if (!item || item.companyRuc !== req.companyRuc) {
+      return res.status(404).json({ success: false, message: 'Ítem no encontrado' });
+    }
+
+    if (!item.manejaSerie) {
+      return res.json([]);
+    }
+
+    const almacen = await prisma.almacen.findFirst({
+      where: { id: almacenId, companyRuc: req.companyRuc },
+    });
+    if (!almacen) {
+      return res.status(404).json({ success: false, message: 'Almacén no encontrado' });
+    }
+
+    const series = await productoSerieModel.findDisponibles({
+      companyRuc: req.companyRuc,
+      catalogItemId,
+      almacenId,
+    });
+
+    res.json(series);
   } catch (err) {
     next(err);
   }
@@ -93,4 +135,4 @@ async function destroy(req, res, next) {
   }
 }
 
-module.exports = { list, create, update, patch, destroy };
+module.exports = { list, listSeriesDisponibles, create, update, patch, destroy };

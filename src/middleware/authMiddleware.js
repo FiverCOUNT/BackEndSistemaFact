@@ -23,7 +23,12 @@ async function requireAuth(req, res, next) {
       });
     }
 
-    const user = await usuarioModel.findById(payload.sub);
+    const userId = parseInt(payload.sub, 10);
+    if (!Number.isFinite(userId)) {
+      return res.status(401).json({ success: false, message: 'Token inválido' });
+    }
+
+    const user = await usuarioModel.findById(userId);
     if (!user) {
       return res.status(401).json({ success: false, message: 'Usuario no encontrado' });
     }
@@ -32,17 +37,20 @@ async function requireAuth(req, res, next) {
       return res.status(403).json({ success: false, message: 'Usuario inactivo' });
     }
 
-    if (user.token !== token) {
+    // Sesión cerrada explícitamente (logout admin / usuario inactivado).
+    if (!user.token) {
       return res.status(401).json({
         success: false,
-        message: 'Sesión cerrada o token revocado',
+        message: 'Sesión cerrada. Vuelve a iniciar sesión.',
       });
     }
 
     req.user = usuarioModel.toPublicUser(user);
     req.userId = user.id;
     req.userRol = user.rol;
-    req.userAlmacenId = user.almacenId || null;
+    req.userAlmacenId = user.almacenId != null ? String(user.almacenId) : null;
+    req.userAlmacenNombre = user.almacen?.nombre ?? null;
+    req.userAlmacenCodigo = user.almacen?.codigo ?? null;
     next();
   } catch (err) {
     next(err);
