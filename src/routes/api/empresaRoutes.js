@@ -5,6 +5,8 @@ const { requireAdmin } = require('../../middleware/requireAdmin');
 const catalogItemApiController = require('../../controllers/catalogItemApiController');
 const inventarioApiController = require('../../controllers/inventarioApiController');
 const almacenApiController = require('../../controllers/almacenApiController');
+const clienteApiController = require('../../controllers/clienteApiController');
+const comprobanteApiController = require('../../controllers/comprobanteApiController');
 
 const router = express.Router({ mergeParams: true });
 
@@ -24,8 +26,25 @@ router.delete('/catalogo/:id', requireAdmin, catalogItemApiController.destroy);
 router.get('/almacenes', almacenApiController.list);
 router.post('/almacenes', requireAdmin, almacenApiController.create);
 
-router.post('/inventario/entradas', inventarioApiController.registrarEntrada);
+router.get('/clientes', clienteApiController.list);
+router.post('/clientes', clienteApiController.create);
+
+router.get('/comprobantes/emisor/health', comprobanteApiController.healthEmisor);
+router.get('/comprobantes', comprobanteApiController.list);
+router.post('/comprobantes', comprobanteApiController.crearYEmitir);
+router.post('/comprobantes/resumen', comprobanteApiController.enviarResumen);
+router.get('/comprobantes/:id/archivos/:tipo', comprobanteApiController.descargarArchivo);
+router.get('/comprobantes/:id', comprobanteApiController.getById);
+router.post('/comprobantes/:id/emitir', comprobanteApiController.emitir);
+
+router.post('/inventario/movimientos', inventarioApiController.registrarMovimiento);
 router.get('/inventario/movimientos', inventarioApiController.listMovimientos);
+router.post('/inventario/entradas', inventarioApiController.registrarEntrada);
+router.post('/inventario/salidas', inventarioApiController.registrarSalida);
+router.get('/entregas', inventarioApiController.listSalidas);
+router.post('/entregas', inventarioApiController.registrarSalida);
+router.get('/inventario/ubicaciones', inventarioApiController.buscarUbicaciones);
+router.get('/inventario/devoluciones', inventarioApiController.listDevolucionesPendientes);
 router.get('/inventario', inventarioApiController.list);
 router.get('/inventario/:id', inventarioApiController.getById);
 router.put('/inventario/saldos', requireAdmin, inventarioApiController.setSaldo);

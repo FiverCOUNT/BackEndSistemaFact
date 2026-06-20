@@ -5,7 +5,10 @@ async function list(req, res, next) {
     const soloActivos = req.query.solo_activos !== 'false';
     const options = { soloActivos };
 
-    if (req.userRol !== 'ADMIN') {
+    const listarTodos =
+      req.query.todos === 'true' || req.query.todos === true || req.query.todos === '1';
+
+    if (req.userRol !== 'ADMIN' && !listarTodos) {
       if (!req.userAlmacenId) {
         return res.status(403).json({
           success: false,

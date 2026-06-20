@@ -23,7 +23,8 @@ function resolveCatalogQuery(req) {
     throw err;
   }
 
-  return { almacenId: userAlm, restrictToAlmacen: true };
+  // Catálogo completo de la empresa; el stock se calcula solo en su almacén (0 si no hay).
+  return { almacenId: userAlm, restrictToAlmacen: false };
 }
 
 module.exports = { resolveCatalogQuery };

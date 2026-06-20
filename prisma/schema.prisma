@@ -67,6 +67,7 @@ model Company {
   tieneCertificado         Boolean? @map("tiene_certificado")
   tieneWebhook             Boolean? @map("tiene_webhook")
   creadoEn                 String?  @map("creado_en") @db.VarChar(30)
+  seriesConfigJson         Json?    @map("series_config")
 
   usuarios Usuario[]
 
@@ -179,16 +180,19 @@ model Movimiento {
   comprobanteId    String?           @map("comprobante_id") @db.VarChar(36)
   guiaRemisionId   String?           @map("guia_remision_id") @db.VarChar(36)
   fechaDespacho    String?           @map("fecha_despacho") @db.VarChar(30)
+  clienteId        String?           @map("cliente_id") @db.VarChar(36)
   lineas           LineaCatalogoItem[]
   comprobante      Invoice?          @relation("MovimientoComprobante", fields: [comprobanteId], references: [id], onDelete: SetNull)
   guiaRemision     Invoice?          @relation("MovimientoGuiaRemision", fields: [guiaRemisionId], references: [id], onDelete: SetNull)
   almacen          Almacen           @relation("MovimientoAlmacenOrigen", fields: [almacenId], references: [id])
   almacenDestino   Almacen?          @relation("MovimientoAlmacenDestino", fields: [almacenDestinoId], references: [id], onDelete: SetNull)
+  cliente          Cliente?          @relation(fields: [clienteId], references: [id], onDelete: SetNull)
 
   @@index([companyRuc])
   @@index([almacenId])
   @@index([almacenDestinoId])
   @@index([comprobanteId])
+  @@index([clienteId])
   @@map("movimientos")
 }
 
@@ -309,6 +313,7 @@ model Cliente {
   telefono    String?  @db.VarChar(30)
   activo      Boolean @default(true)
   invoices    Invoice[]
+  movimientos Movimiento[]
 
   @@unique([companyRuc, tipoDoc, numeroDoc])
   @@index([companyRuc])
@@ -388,7 +393,7 @@ model Invoice {
   sunatCodigoDirecto      String?           @map("sunat_codigo") @db.VarChar(20)
   sunatDescripcionDirecto   String?           @map("sunat_descripcion") @db.Text
   sunatNotasDirecto       Json?             @map("sunat_notas")
-  hashCpeDirecto          String?           @map("hash_cpe") @db.VarChar(128)
+  hash                    String?           @map("hash_cpe") @db.VarChar(128)
   sunatJson               Json?             @map("sunat")
   enviarAutomatico        Boolean?          @map("enviar_automatico")
   clienteId               String?           @map("cliente_id") @db.VarChar(36)

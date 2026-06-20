@@ -24,8 +24,9 @@
     <input type="text" id="nombre" name="nombre" value="<%= form.nombre || '' %>" required />
   </div>
   <div class="field">
-    <label for="codigo">Código interno</label>
-    <input type="text" id="codigo" name="codigo" value="<%= form.codigo || '' %>" maxlength="64" />
+    <label for="codigo">Código interno (SUNAT) *</label>
+    <input type="text" id="codigo" name="codigo" value="<%= form.codigo || '' %>" maxlength="30" pattern="[A-Za-z0-9.\-_/]{1,30}" placeholder="PROD001" />
+    <p class="field-hint">Alfanumérico, máx. 30 caracteres. Se envía a SUNAT como código de producto.</p>
   </div>
   <div class="field field-full">
     <label for="descripcion">Descripción</label>

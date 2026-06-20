@@ -1,7 +1,11 @@
 require('./config/env');
+const storageConfig = require('./config/storage');
 const app = require('./app');
 const config = require('./config');
 const { initDatabase } = require('./models');
+
+storageConfig.assertR2ProductionConfig();
+storageConfig.warnR2PublicUrlMissing();
 
 
 

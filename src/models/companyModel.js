@@ -1,5 +1,15 @@
 const { randomUUID } = require('crypto');
 const prisma = require('../config/prisma');
+const {
+  buildSeriesConfigFromBody,
+  seriesConfigToFormFields,
+  normalizeStoredSeriesConfig,
+} = require('../utils/seriesConfig');
+
+function normalizeUbigeoForStorage(value) {
+  const digits = String(value || '').replace(/\D/g, '');
+  return digits.length === 6 ? digits : null;
+}
 
 function toPublic(company) {
   if (!company) return null;
@@ -19,6 +29,12 @@ function toPublic(company) {
     isActive: company.isActive,
     creadoEn: company.creadoEn,
     addressId: company.addressId,
+    solUser: company.solUser,
+    tieneCertificado: company.tieneCertificado,
+    rutaFirma: company.rutaFirma,
+    tieneSolPass: Boolean(company.solPass),
+    tieneCertificatePassword: Boolean(company.certificatePassword),
+    seriesConfig: normalizeStoredSeriesConfig(company.seriesConfigJson),
     usuariosCount: company._count?.usuarios ?? 0,
     address: company.address
       ? {
@@ -40,7 +56,7 @@ function buildAddressData(body) {
 
   return {
     id: randomUUID(),
-    ubigeo: ubigeo || null,
+    ubigeo: normalizeUbigeoForStorage(body.ubigeo),
     departamento: (body.departamento || '').trim() || null,
     provincia: (body.provincia || '').trim() || null,
     distrito: (body.distrito || '').trim() || null,
@@ -49,8 +65,10 @@ function buildAddressData(body) {
   };
 }
 
-function buildCompanyData(body) {
-  return {
+function buildCompanyData(body, options = {}) {
+  const { existing = null, keepEmptyPasswords = true } = options;
+
+  const data = {
     ruc: (body.ruc || '').trim(),
     nombre: (body.nombre || '').trim(),
     nombreComercial: (body.nombreComercial || '').trim() || null,
@@ -64,7 +82,39 @@ function buildCompanyData(body) {
     creadoEn: (body.creadoEn || '').trim() || null,
     activo: body.activo === 'on' || body.activo === 'true' || body.activo === true,
     isActive: body.isActive === 'on' || body.isActive === 'true' || body.isActive === true,
+    solUser: (body.solUser || '').trim() || null,
   };
+
+  const solPass = (body.solPass || '').trim();
+  if (solPass) {
+    data.solPass = solPass;
+  } else if (!keepEmptyPasswords || !existing) {
+    data.solPass = null;
+  }
+
+  const certificatePassword = (body.certificatePassword || '').trim();
+  if (certificatePassword) {
+    data.certificatePassword = certificatePassword;
+  } else if (!keepEmptyPasswords || !existing) {
+    data.certificatePassword = null;
+  }
+
+  if (body.rutaFirma !== undefined) {
+    data.rutaFirma = body.rutaFirma || null;
+  }
+  if (body.tieneCertificado !== undefined) {
+    data.tieneCertificado =
+      body.tieneCertificado === 'on'
+      || body.tieneCertificado === 'true'
+      || body.tieneCertificado === true;
+  }
+
+  const seriesConfig = buildSeriesConfigFromBody(body);
+  if (seriesConfig) {
+    data.seriesConfigJson = seriesConfig;
+  }
+
+  return data;
 }
 
 function buildSearchWhere(q) {
@@ -121,9 +171,18 @@ async function findByRucExceptId(ruc, id) {
   });
 }
 
-async function create(body) {
-  const companyData = buildCompanyData(body);
+async function create(body, { certFile = null } = {}) {
+  const companyData = buildCompanyData(body, { keepEmptyPasswords: false });
   const addressData = buildAddressData(body);
+
+  if (certFile?.buffer?.length) {
+    const companyCertificadoService = require('../services/companyCertificadoService');
+    const uploaded = await companyCertificadoService.uploadCertificado(companyData.ruc, certFile);
+    if (uploaded) {
+      companyData.rutaFirma = uploaded.key;
+      companyData.tieneCertificado = true;
+    }
+  }
 
   return prisma.$transaction(async (tx) => {
     if (addressData) {
@@ -138,20 +197,33 @@ async function create(body) {
   });
 }
 
-async function update(id, body) {
-  const companyData = buildCompanyData(body);
+async function update(id, body, { certFile = null, existing = null } = {}) {
+  const current =
+    existing
+    || (await prisma.company.findUnique({
+      where: { id: BigInt(id) },
+      include: { address: true },
+    }));
+  if (!current) return null;
+
+  const companyData = buildCompanyData(body, { existing: current, keepEmptyPasswords: true });
   const addressData = buildAddressData(body);
-  const existing = await prisma.company.findUnique({
-    where: { id: BigInt(id) },
-    include: { address: true },
-  });
-  if (!existing) return null;
+
+  if (certFile?.buffer?.length) {
+    const companyCertificadoService = require('../services/companyCertificadoService');
+    const ruc = companyData.ruc || current.ruc;
+    const uploaded = await companyCertificadoService.uploadCertificado(ruc, certFile);
+    if (uploaded) {
+      companyData.rutaFirma = uploaded.key;
+      companyData.tieneCertificado = true;
+    }
+  }
 
   return prisma.$transaction(async (tx) => {
     if (addressData) {
-      if (existing.addressId) {
+      if (current.addressId) {
         await tx.address.update({
-          where: { id: existing.addressId },
+          where: { id: current.addressId },
           data: {
             ubigeo: addressData.ubigeo,
             departamento: addressData.departamento,
@@ -170,7 +242,7 @@ async function update(id, body) {
     return tx.company.update({
       where: { id: BigInt(id) },
       data: companyData,
-      include: { address: true },
+      include: { address: true, _count: { select: { usuarios: true } } },
     });
   });
 }
@@ -205,6 +277,7 @@ async function remove(id) {
 module.exports = {
   toPublic,
   buildCompanyData,
+  seriesConfigToFormFields,
   findPaginated,
   findById,
   findByRuc,

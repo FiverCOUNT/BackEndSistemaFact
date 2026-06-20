@@ -29,7 +29,7 @@
           <div class="message error"><%= error %></div>
         <% } %>
 
-        <form class="form" method="POST" action="/companies/<%= company.id %>">
+        <form class="form" method="POST" action="/companies/<%= company.id %>" enctype="multipart/form-data">
           <%- include('_form', { form }) %>
           <div class="form-actions">
             <button type="submit">Guardar cambios</button>

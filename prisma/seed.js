@@ -127,20 +127,6 @@ async function main() {
     },
   });
 
-  console.log('Insertando usuario...');
-  const contrasenaHash = await bcrypt.hash('demo123', 10);
-  await prisma.usuario.create({
-    data: {
-      email: 'demo@empresademo.pe',
-      contrasena: contrasenaHash,
-      lastUpdated: now,
-      estado: 'ACTIVO',
-      rol: 'ADMIN',
-      companyId: company.id,
-      almacenId: IDS.almacenPrincipal,
-    },
-  });
-
   console.log('Insertando almacenes (7)...');
   await prisma.almacen.createMany({
     data: [
@@ -195,6 +181,20 @@ async function main() {
         activo: false,
       },
     ],
+  });
+
+  console.log('Insertando usuario...');
+  const contrasenaHash = await bcrypt.hash('demo123', 10);
+  await prisma.usuario.create({
+    data: {
+      email: 'demo@empresademo.pe',
+      contrasena: contrasenaHash,
+      lastUpdated: now,
+      estado: 'ACTIVO',
+      rol: 'ADMIN',
+      companyId: company.id,
+      almacenId: IDS.almacenPrincipal,
+    },
   });
 
   await prisma.usuario.create({

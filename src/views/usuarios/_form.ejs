@@ -64,7 +64,7 @@
     <option value="">— Sin empresa —</option>
     <% companies.forEach(function(c) { %>
       <option
-        value="<%= c.id %>"
+        value="<%= String(c.id) %>"
         data-ruc="<%= c.ruc %>"
         <%= String(form.companyId) === String(c.id) ? 'selected' : '' %>
       >
@@ -79,15 +79,6 @@
   <label for="almacenId">Almacén</label>
   <select id="almacenId" name="almacenId" required>
     <option value="">— Seleccionar almacén —</option>
-    <% almacenes.forEach(function(a) { %>
-      <option
-        value="<%= a.id %>"
-        data-company-ruc="<%= a.companyRuc %>"
-        <%= form.almacenId === a.id ? 'selected' : '' %>
-      >
-        <%= a.nombre %><% if (a.codigo) { %> (<%= a.codigo %>)<% } %>
-      </option>
-    <% }); %>
   </select>
   <span class="field-hint">Obligatorio para Admin y Usuario. Almacén principal de trabajo en la app móvil.</span>
 </div>
@@ -97,34 +88,61 @@
   var company = document.getElementById('companyId');
   var almacenField = document.getElementById('almacen-field');
   var almacen = document.getElementById('almacenId');
-  var options = Array.prototype.slice.call(almacen.querySelectorAll('option[data-company-ruc]'));
+  var allAlmacenes = <%- JSON.stringify(almacenes.map(function(a) {
+    return {
+      id: a.id,
+      nombre: a.nombre,
+      codigo: a.codigo || '',
+      companyRuc: a.companyRuc,
+      activo: a.activo !== false,
+    };
+  })) %>;
+  var selectedAlmacenId = <%- JSON.stringify(form.almacenId || '') %>;
 
   function selectedCompanyRuc() {
     var opt = company.options[company.selectedIndex];
-    return opt ? opt.getAttribute('data-ruc') : '';
+    return opt ? opt.getAttribute('data-ruc') || '' : '';
   }
 
-  function syncForm() {
+  function almacenLabel(item) {
+    var label = item.nombre;
+    if (item.codigo) label += ' (' + item.codigo + ')';
+    if (!item.activo) label += ' — inactivo';
+    return label;
+  }
+
+  function rebuildAlmacenOptions() {
     var ruc = selectedCompanyRuc();
     var hasCompany = Boolean(ruc);
     almacenField.style.display = hasCompany ? '' : 'none';
     almacen.required = hasCompany;
+
+    var previous = almacen.value || selectedAlmacenId || '';
+    almacen.innerHTML = '<option value="">— Seleccionar almacén —</option>';
+
     if (!hasCompany) {
       almacen.value = '';
       return;
     }
-    options.forEach(function (opt) {
-      var match = opt.getAttribute('data-company-ruc') === ruc;
-      opt.hidden = !match;
-      opt.disabled = !match;
-    });
-    if (almacen.value) {
-      var current = almacen.querySelector('option[value="' + almacen.value + '"]');
-      if (current && current.disabled) almacen.value = '';
+
+    allAlmacenes
+      .filter(function (item) { return item.companyRuc === ruc; })
+      .forEach(function (item) {
+        var opt = document.createElement('option');
+        opt.value = item.id;
+        opt.textContent = almacenLabel(item);
+        almacen.appendChild(opt);
+      });
+
+    if (previous && almacen.querySelector('option[value="' + previous + '"]')) {
+      almacen.value = previous;
     }
   }
 
-  company.addEventListener('change', syncForm);
-  syncForm();
+  company.addEventListener('change', function () {
+    selectedAlmacenId = '';
+    rebuildAlmacenOptions();
+  });
+  rebuildAlmacenOptions();
 })();
 </script>

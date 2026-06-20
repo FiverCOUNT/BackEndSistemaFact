@@ -52,7 +52,7 @@ async function refresh(req, res, next) {
   }
 }
 
-/** Perfil de sesión actual (tokens + almacén asignado). */
+/** Perfil de sesión actual (tokens + configuración de empresa y almacenes). */
 async function me(req, res, next) {
   try {
     const data = await authService.sessionFromUserId(req.userId);

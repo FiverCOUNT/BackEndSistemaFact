@@ -1,4 +1,17 @@
+const { randomUUID } = require('crypto');
 const prisma = require('../config/prisma');
+const clienteModel = require('./clienteModel');
+const comprobanteArchivosService = require('../services/comprobanteArchivosService');
+const comprobantePdfService = require('../services/comprobantePdfService');
+const {
+  toApiTimestamp,
+  compareStoredTimestamps,
+  toStoredTimestamp,
+  calendarDayStartMsPe,
+  calendarDayEndMsPe,
+} = require('../utils/fechas');
+
+const IGV_RATE = 0.18;
 
 const TIPO_DOC_LABEL = {
   '01': 'Factura',
@@ -8,6 +21,348 @@ const TIPO_DOC_LABEL = {
   '09': 'Guía remisión',
 };
 
+const TIPO_CONFIG = {
+  FACTURA: { tipoDoc: '01', serie: 'F001' },
+  BOLETA: { tipoDoc: '03', serie: 'B001' },
+  NOTA_CREDITO: { tipoDoc: '07', serie: 'FC01' },
+  NOTA_DEBITO: { tipoDoc: '08', serie: 'FD01' },
+  GUIA_EMISION: { tipoDoc: '09', serie: 'T001' },
+};
+
+const COD_TO_TIPO = {
+  '01': 'FACTURA',
+  '03': 'BOLETA',
+  '07': 'NOTA_CREDITO',
+  '08': 'NOTA_DEBITO',
+  '09': 'GUIA_EMISION',
+};
+
+const INVOICE_INCLUDE = {
+  cliente: {
+    include: { address: true },
+  },
+  details: {
+    include: { catalogItem: true },
+  },
+  legends: true,
+  documentoAfectado: {
+    select: { id: true, tipoDoc: true, serie: true, correlativo: true },
+  },
+};
+
+function round4(value) {
+  return Math.round(Number(value) * 10000) / 10000;
+}
+
+function toNumber(value, fallback = 0) {
+  const n = Number(value);
+  return Number.isFinite(n) ? n : fallback;
+}
+
+function resolveTipoConfig(tipoRaw) {
+  const key = String(tipoRaw || '').trim().toUpperCase();
+  if (TIPO_CONFIG[key]) return TIPO_CONFIG[key];
+  if (COD_TO_TIPO[key]) return TIPO_CONFIG[COD_TO_TIPO[key]];
+  throw new Error(`Tipo de comprobante no válido: ${tipoRaw}`);
+}
+
+function parseReceptor(body) {
+  const receptor = body.receptor || body.client || body.cliente;
+  if (!receptor || typeof receptor !== 'object') {
+    throw new Error('receptor es obligatorio.');
+  }
+
+  const tipoDoc = String(receptor.tipo_doc || receptor.tipoDoc || '1').trim();
+  const numeroDoc = String(receptor.numero_doc || receptor.numeroDoc || receptor.ruc || '').trim();
+  const razonSocial = String(
+    receptor.razon_social || receptor.razonSocial || receptor.nombre || '',
+  ).trim();
+
+  if (!numeroDoc) throw new Error('receptor.numero_doc es obligatorio.');
+  if (!razonSocial) throw new Error('receptor.razon_social es obligatorio.');
+
+  return { tipoDoc, numeroDoc, razonSocial };
+}
+
+function validateReceptorForTipo(tipoDocComprobante, receptor) {
+  const digits = String(receptor.numeroDoc || '').replace(/\D/g, '');
+
+  if (tipoDocComprobante === '01') {
+    if (digits.length !== 11) {
+      throw new Error('Factura: el cliente debe tener un RUC de 11 dígitos.');
+    }
+    return { ...receptor, tipoDoc: '6', numeroDoc: digits };
+  }
+
+  if (tipoDocComprobante === '03' && receptor.tipoDoc === '1' && digits.length !== 8) {
+    throw new Error('Boleta: el DNI del cliente debe tener 8 dígitos.');
+  }
+
+  return { ...receptor, numeroDoc: digits || receptor.numeroDoc };
+}
+
+function calcularLinea(catalogItem, cantidad, precioOverride = null) {
+  const precioConIgv = precioOverride != null && precioOverride !== ''
+    ? toNumber(precioOverride)
+    : toNumber(catalogItem.precioUnitario);
+  const afectacion = catalogItem.afectacionIgv || '10';
+  const qty = toNumber(cantidad, 1);
+
+  if (afectacion === '10') {
+    const valorUnitario = round4(precioConIgv / (1 + IGV_RATE));
+    const valorVenta = round4(valorUnitario * qty);
+    const igv = round4(valorVenta * IGV_RATE);
+    const total = round4(valorVenta + igv);
+
+    return {
+      descripcion: catalogItem.descripcion || catalogItem.nombre,
+      nombre: catalogItem.nombre,
+      cantidad: qty,
+      unidad: catalogItem.unidad || 'NIU',
+      mtoValorUnitario: valorUnitario,
+      mtoPrecioUnitario: precioConIgv,
+      mtoBaseIgv: valorVenta,
+      mtoValorVenta: valorVenta,
+      mtoIgv: igv,
+      totalFactura: total,
+      porcentajeIgv: 18,
+      tipAfeIgv: afectacion,
+    };
+  }
+
+  const valorVenta = round4(precioConIgv * qty);
+  return {
+    descripcion: catalogItem.descripcion || catalogItem.nombre,
+    nombre: catalogItem.nombre,
+    cantidad: qty,
+    unidad: catalogItem.unidad || 'NIU',
+    mtoValorUnitario: precioConIgv,
+    mtoPrecioUnitario: precioConIgv,
+    mtoBaseIgv: valorVenta,
+    mtoValorVenta: valorVenta,
+    mtoIgv: 0,
+    totalFactura: valorVenta,
+    porcentajeIgv: 0,
+    tipAfeIgv: afectacion,
+  };
+}
+
+function calcularTotales(details) {
+  const gravadas = details
+    .filter((d) => d.tipAfeIgv === '10')
+    .reduce((sum, d) => sum + toNumber(d.mtoValorVenta), 0);
+  const exoneradas = details
+    .filter((d) => d.tipAfeIgv === '20')
+    .reduce((sum, d) => sum + toNumber(d.mtoValorVenta), 0);
+  const inafectas = details
+    .filter((d) => !['10', '20'].includes(d.tipAfeIgv))
+    .reduce((sum, d) => sum + toNumber(d.mtoValorVenta), 0);
+  const igv = details.reduce((sum, d) => sum + toNumber(d.mtoIgv), 0);
+  const valorVenta = gravadas + exoneradas + inafectas;
+  const totalVentas = details.reduce((sum, d) => sum + toNumber(d.totalFactura), 0);
+
+  return {
+    mtoOperGravadas: round4(gravadas),
+    mtoOperExoneradas: round4(exoneradas),
+    mtoOperInafectas: round4(inafectas),
+    mtoIgv: round4(igv),
+    totalImpuestos: round4(igv),
+    subTotal: round4(valorVenta),
+    mtoImpVenta: round4(totalVentas),
+  };
+}
+
+async function getNextCorrelativo(companyRuc, tipoDoc, serie) {
+  const last = await prisma.invoice.findFirst({
+    where: { companyRuc, tipoDoc, serie },
+    orderBy: { correlativo: 'desc' },
+    select: { correlativo: true },
+  });
+
+  const current = last ? parseInt(String(last.correlativo).replace(/\D/g, ''), 10) : 0;
+  const next = Number.isFinite(current) ? current + 1 : 1;
+  return String(next).padStart(8, '0');
+}
+
+async function resolveClienteId(companyRuc, receptor) {
+  const resolved = await clienteModel.resolveForSalida({
+    companyRuc,
+    clienteBody: {
+      tipo_doc: receptor.tipoDoc,
+      numero_doc: receptor.numeroDoc,
+      razon_social: receptor.razonSocial,
+    },
+  });
+
+  if (resolved.error === 'cliente_nombre_requerido') {
+    throw new Error('receptor.razon_social es obligatorio.');
+  }
+
+  return resolved.clienteId;
+}
+
+async function loadFacturaReferencia(companyRuc, ref) {
+  const id = String(ref.id || '').trim();
+  if (id) {
+    return prisma.invoice.findFirst({
+      where: { id, companyRuc },
+      include: { details: { include: { catalogItem: true } }, cliente: true },
+    });
+  }
+
+  const serie = String(ref.serie || '').trim();
+  let correlativo = String(ref.correlativo || ref.numero || '').trim();
+  if (correlativo.includes('-')) {
+    const parts = correlativo.split('-');
+    correlativo = parts[parts.length - 1];
+  }
+
+  if (!serie || !correlativo) return null;
+
+  return prisma.invoice.findFirst({
+    where: { companyRuc, serie, correlativo },
+    include: { details: { include: { catalogItem: true } }, cliente: true },
+  });
+}
+
+async function loadFacturasVinculadas(companyRuc, facturas) {
+  if (!Array.isArray(facturas) || facturas.length === 0) {
+    throw new Error('Debe vincular al menos una factura a la guía.');
+  }
+
+  const loaded = [];
+  for (const ref of facturas) {
+    const invoice = await loadFacturaReferencia(companyRuc, ref);
+    if (!invoice) {
+      const etiqueta = ref.serie && ref.correlativo
+        ? `${ref.serie}-${ref.correlativo}`
+        : ref.id || 'desconocida';
+      throw new Error(`Factura vinculada no encontrada: ${etiqueta}`);
+    }
+    loaded.push(invoice);
+  }
+  return loaded;
+}
+
+function aggregateDetailsFromFacturas(facturas) {
+  const aggregated = [];
+
+  for (const factura of facturas) {
+    for (const detail of factura.details || []) {
+      aggregated.push({
+        catalogItemId: detail.catalogItemId,
+        descripcion: detail.descripcion || detail.nombre,
+        nombre: detail.nombre,
+        cantidad: toNumber(detail.cantidad, 1),
+        unidad: detail.unidad || detail.catalogItem?.unidad || 'NIU',
+        mtoPrecioUnitario: toNumber(detail.mtoPrecioUnitario),
+        tipAfeIgv: detail.tipAfeIgv || '10',
+        mtoValorVenta: toNumber(detail.mtoValorVenta),
+        mtoIgv: toNumber(detail.mtoIgv),
+        totalFactura: toNumber(detail.totalFactura),
+        mtoValorUnitario: toNumber(detail.mtoValorUnitario),
+        mtoBaseIgv: toNumber(detail.mtoBaseIgv),
+        porcentajeIgv: toNumber(detail.porcentajeIgv, 18),
+        productoSerieId: detail.productoSerieId,
+        catalogItem: detail.catalogItem,
+      });
+    }
+  }
+
+  if (!aggregated.length) {
+    throw new Error('Las facturas vinculadas no tienen líneas de detalle.');
+  }
+
+  return aggregated;
+}
+
+function buildEnvioMeta(body, company, cliente) {
+  const envioBody = body.envio && typeof body.envio === 'object' ? body.envio : {};
+
+  return {
+    envio: {
+      cod_traslado: envioBody.cod_traslado || envioBody.codTraslado || '01',
+      mod_traslado: envioBody.mod_traslado || envioBody.modTraslado || '02',
+      fecha_traslado: envioBody.fecha_traslado || envioBody.fechaTraslado || null,
+      peso_total: envioBody.peso_total ?? envioBody.pesoTotal ?? null,
+      und_peso_total: envioBody.und_peso_total || envioBody.undPesoTotal || 'KGM',
+      partida: envioBody.partida || (company?.address
+        ? { ubigeo: company.address.ubigeo, direccion: company.address.direccion }
+        : undefined),
+      llegada: envioBody.llegada || (cliente?.address
+        ? { ubigeo: cliente.address.ubigeo, direccion: cliente.address.direccion }
+        : undefined),
+      transportista: envioBody.transportista || undefined,
+      vehiculo: envioBody.vehiculo || undefined,
+      conductor: envioBody.conductor || undefined,
+    },
+  };
+}
+
+async function resolveDocumentoAfectadoId(companyRuc, documentoAfectado) {
+  if (!documentoAfectado || typeof documentoAfectado !== 'object') {
+    throw new Error('documento_afectado es obligatorio para notas.');
+  }
+
+  const id = String(documentoAfectado.id || '').trim();
+  if (id) {
+    const row = await prisma.invoice.findFirst({ where: { id, companyRuc } });
+    if (!row) throw new Error('documento_afectado no encontrado.');
+    return row.id;
+  }
+
+  const serie = String(documentoAfectado.serie || '').trim();
+  const correlativo = String(documentoAfectado.correlativo || documentoAfectado.numero || '').trim();
+  if (!serie || !correlativo) {
+    throw new Error('documento_afectado requiere id o serie/correlativo.');
+  }
+
+  const row = await prisma.invoice.findFirst({
+    where: { companyRuc, serie, correlativo },
+  });
+  if (!row) throw new Error('documento_afectado no encontrado.');
+  return row.id;
+}
+
+async function loadCatalogItems(companyRuc, lineas) {
+  const ids = [...new Set(lineas.map((l) => String(l.catalog_item_id || l.catalogItemId || '').trim()))];
+  if (!ids.length || ids.some((id) => !id)) {
+    throw new Error('Cada línea requiere catalog_item_id.');
+  }
+
+  const items = await prisma.catalogItem.findMany({
+    where: { companyRuc, id: { in: ids }, activo: true },
+  });
+  const map = new Map(items.map((item) => [item.id, item]));
+
+  for (const id of ids) {
+    if (!map.has(id)) throw new Error(`Producto de catálogo no encontrado: ${id}`);
+  }
+
+  return map;
+}
+
+function toApiSaleDetail(detail) {
+  return {
+    id: detail.id,
+    invoice_id: detail.invoiceId,
+    catalog_item_id: detail.catalogItemId,
+    descripcion: detail.descripcion,
+    nombre: detail.nombre,
+    cantidad: toNumber(detail.cantidad),
+    unidad: detail.unidad,
+    mto_precio_unitario: toNumber(detail.mtoPrecioUnitario),
+    tip_afe_igv: detail.tipAfeIgv,
+    mto_valor_venta: toNumber(detail.mtoValorVenta),
+    mto_igv: toNumber(detail.mtoIgv),
+    total: toNumber(detail.totalFactura),
+    mto_valor_unitario: toNumber(detail.mtoValorUnitario),
+    mto_base_igv: toNumber(detail.mtoBaseIgv),
+    porcentaje_igv: toNumber(detail.porcentajeIgv),
+    producto_serie_id: detail.productoSerieId,
+  };
+}
+
 function formatMoney(value) {
   if (value == null) return '—';
   const n = Number(value);
@@ -15,7 +370,7 @@ function formatMoney(value) {
   return n.toLocaleString('es-PE', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 }
 
-function toPublic(invoice) {
+function toPublicSummary(invoice) {
   if (!invoice) return null;
   const doc = `${invoice.serie}-${invoice.correlativo}`;
   return {
@@ -26,13 +381,367 @@ function toPublic(invoice) {
     serie: invoice.serie,
     correlativo: invoice.correlativo,
     numero: doc,
-    fechaEmision: invoice.fechaEmision,
+    fechaEmision: toApiTimestamp(invoice.fechaEmision),
     estado: invoice.estado,
     tipoMoneda: invoice.tipoMoneda,
     total: formatMoney(invoice.mtoImpVenta),
     clienteNombre: invoice.cliente?.razonSocial || '—',
     clienteDoc: invoice.cliente?.numeroDoc,
+    sunatEstado: invoice.sunatEstadoDirecto || invoice.cdrEstado,
+    sunatCodigo: invoice.sunatCodigoDirecto,
+    sunatDescripcion: invoice.sunatDescripcionDirecto,
   };
+}
+
+function resolveEstadoApi(invoice) {
+  if (invoice.estado && invoice.estado !== 'BORRADOR') return invoice.estado;
+  if (invoice.sunatJson && typeof invoice.sunatJson === 'object') {
+    return mapEstadoEmision(invoice.tipoDoc, invoice.sunatJson);
+  }
+  const sunat = String(invoice.sunatEstadoDirecto || invoice.cdrEstado || '').trim().toUpperCase();
+  if (sunat) {
+    return mapEstadoEmision(invoice.tipoDoc, { estado: sunat, success: sunat !== 'RECHAZADA' });
+  }
+  return invoice.estado || 'BORRADOR';
+}
+
+function sanitizeSunatForApi(sunatJson, includePayload = true) {
+  if (!sunatJson || typeof sunatJson !== 'object') return sunatJson;
+  if (includePayload) return sunatJson;
+  const cleaned = { ...sunatJson };
+  delete cleaned.xml;
+  delete cleaned.cdr_zip;
+  delete cleaned.cdr;
+  delete cleaned.pdf;
+  delete cleaned.pdf_base64;
+  return cleaned;
+}
+
+function toApiInvoice(invoice, options = {}) {
+  if (!invoice) return null;
+
+  const { apiBaseUrl, companyRuc, includeSunatPayload = true } = options;
+  const estadoEfectivo = resolveEstadoApi(invoice);
+  const invoiceForUrls = { ...invoice, estado: estadoEfectivo };
+  const fileUrls = comprobanteArchivosService.resolveFileUrls(invoiceForUrls, apiBaseUrl);
+  const enrichFileUrls = (resolved) => ({
+    pdf_url: resolved.pdf_url || invoice.pdfUrl,
+    cdr_zip_url: resolved.cdr_zip_url || invoice.cdrZipUrl,
+    xml_url: resolved.xml_url || invoice.xmlUrlDirecto,
+  });
+  const urls = enrichFileUrls(fileUrls);
+
+  return {
+    id: invoice.id,
+    company_ruc: invoice.companyRuc,
+    ubl_version: invoice.ublVersion,
+    tipo_operacion: invoice.tipoOperacion,
+    tipo_doc: invoice.tipoDoc,
+    serie: invoice.serie,
+    correlativo: invoice.correlativo,
+    fecha_emision: toApiTimestamp(invoice.fechaEmision),
+    fec_vencimiento: invoice.fecVencimiento,
+    tipo_moneda: invoice.tipoMoneda,
+    forma_pago: invoice.formaPago,
+    observacion: invoice.observacion,
+    mto_oper_gravadas: toNumber(invoice.mtoOperGravadas),
+    mto_oper_exoneradas: toNumber(invoice.mtoOperExoneradas),
+    mto_oper_inafectas: toNumber(invoice.mtoOperInafectas),
+    mto_oper_exportacion: toNumber(invoice.mtoOperExportacion),
+    mto_igv: toNumber(invoice.mtoIgv),
+    total_impuestos: toNumber(invoice.totalImpuestos),
+    sub_total: toNumber(invoice.subTotal),
+    mto_imp_venta: toNumber(invoice.mtoImpVenta),
+    motivo_codigo: invoice.motivoCodigo,
+    motivo_nota: invoice.motivoNota,
+    documento_afectado_id: invoice.documentoAfectadoId,
+    documento_afectado: invoice.documentoAfectado
+      ? {
+          id: invoice.documentoAfectado.id,
+          tipo_doc: invoice.documentoAfectado.tipoDoc,
+          serie: invoice.documentoAfectado.serie,
+          correlativo: invoice.documentoAfectado.correlativo,
+        }
+      : undefined,
+    estado: estadoEfectivo,
+    cdr_estado: invoice.cdrEstado,
+    pdf_url: urls.pdf_url,
+    cdr_zip_url: urls.cdr_zip_url,
+    xml_url: urls.xml_url,
+    sunat_estado: invoice.sunatEstadoDirecto || invoice.cdrEstado,
+    sunat_codigo: invoice.sunatCodigoDirecto,
+    sunat_descripcion: invoice.sunatDescripcionDirecto,
+    sunat_notas: invoice.sunatNotasDirecto,
+    hash: invoice.hash,
+    hash_cpe: invoice.hash,
+    sunat: sanitizeSunatForApi(invoice.sunatJson, includeSunatPayload),
+    puede_reenviar: estadoEfectivo === 'RECHAZADO' && ['01', '03', '07', '08', '09'].includes(invoice.tipoDoc),
+    cliente: invoice.cliente ? clienteModel.toApi(invoice.cliente) : undefined,
+    client: invoice.cliente
+      ? {
+          tipo_doc: invoice.cliente.tipoDoc,
+          numero_doc: invoice.cliente.numeroDoc,
+          razon_social: invoice.cliente.razonSocial,
+          nombre: invoice.cliente.razonSocial,
+        }
+      : undefined,
+    details: (invoice.details || []).map(toApiSaleDetail),
+    legends: (invoice.legends || []).map((legend) => ({
+      code: legend.code,
+      value: legend.value,
+    })),
+  };
+}
+
+function mapEstadoEmision(tipoDoc, emisorData) {
+  const raw = String(emisorData?.estado || '').trim().toUpperCase();
+  if (raw === 'ACEPTADA' || raw === 'ACEPTADO') return 'ACEPTADO';
+  if (raw === 'RECHAZADA' || raw === 'RECHAZADO') return 'RECHAZADO';
+  if (raw === 'GENERADA') return 'ENVIADO';
+  if (raw === 'ENVIADA' || raw === 'PROCESANDO' || raw === 'ENVIADO') return 'ENVIADO';
+  if (tipoDoc === '03' && emisorData.success) return 'ENVIADO';
+  if (emisorData.success === false) return 'RECHAZADO';
+  if (emisorData.success === true) return 'ENVIADO';
+  return 'ENVIADO';
+}
+
+async function findCompany(companyRuc) {
+  return prisma.company.findFirst({
+    where: { ruc: companyRuc },
+    include: { address: true },
+  });
+}
+
+async function getNextResumenCorrelativo(companyRuc) {
+  const count = await prisma.invoice.count({
+    where: { companyRuc, tipoDoc: '03', estado: { in: ['ACEPTADO', 'ENVIADO'] } },
+  });
+  return String(count + 1).padStart(3, '0');
+}
+
+async function findBoletasPendientesResumen(companyRuc, fecha = null) {
+  const boletas = await prisma.invoice.findMany({
+    where: {
+      companyRuc,
+      tipoDoc: '03',
+      estado: 'ENVIADO',
+    },
+    include: {
+      cliente: { include: { address: true } },
+      details: { include: { catalogItem: true } },
+    },
+  });
+
+  return boletas.filter((boleta) => {
+    const sunat = boleta.sunatJson;
+    if (sunat && typeof sunat === 'object' && sunat.resumen?.success) return false;
+    if (!fecha) return true;
+    const ms = Number.parseInt(String(boleta.fechaEmision || ''), 10);
+    if (!Number.isFinite(ms)) return false;
+    const boletaFecha = new Date(ms).toISOString().slice(0, 10);
+    return boletaFecha === fecha;
+  });
+}
+
+async function marcarBoletasResumidas(ids, resumenData) {
+  await prisma.invoice.updateMany({
+    where: { id: { in: ids } },
+    data: {
+      estado: resumenData.success ? 'ACEPTADO' : 'ENVIADO',
+      sunatEstadoDirecto: resumenData.estado || null,
+      sunatCodigoDirecto: resumenData.codigo_cdr != null ? String(resumenData.codigo_cdr) : null,
+      sunatDescripcionDirecto: resumenData.descripcion || null,
+      sunatNotasDirecto: resumenData.observaciones ?? null,
+    },
+  });
+
+  for (const id of ids) {
+    const row = await prisma.invoice.findUnique({ where: { id }, select: { sunatJson: true } });
+    const prev = row?.sunatJson && typeof row.sunatJson === 'object' ? row.sunatJson : {};
+    await prisma.invoice.update({
+      where: { id },
+      data: {
+        sunatJson: { ...prev, resumen: resumenData },
+      },
+    });
+  }
+}
+
+async function createFromMobileRequest(companyRuc, body) {
+  const tipoConfig = resolveTipoConfig(body.tipo);
+  const receptor = validateReceptorForTipo(tipoConfig.tipoDoc, parseReceptor(body));
+  const lineas = Array.isArray(body.lineas) ? body.lineas : [];
+  const company = await findCompany(companyRuc);
+
+  let saleDetails = [];
+  let totalesJson = null;
+
+  if (tipoConfig.tipoDoc === '09') {
+    const facturas = await loadFacturasVinculadas(
+      companyRuc,
+      body.facturas || body.facturasVinculadas || [],
+    );
+    saleDetails = aggregateDetailsFromFacturas(facturas);
+    const clienteRow = await prisma.cliente.findFirst({
+      where: { companyRuc, tipoDoc: receptor.tipoDoc, numeroDoc: receptor.numeroDoc },
+      include: { address: true },
+    });
+    totalesJson = {
+      ...buildEnvioMeta(body, company, clienteRow),
+      facturas_vinculadas: facturas.map((f) => f.id),
+    };
+  } else {
+    if (lineas.length === 0) {
+      throw new Error('Debe incluir al menos una línea.');
+    }
+
+    const catalogMap = await loadCatalogItems(companyRuc, lineas);
+    saleDetails = lineas.map((linea) => {
+      const catalogItemId = String(linea.catalog_item_id || linea.catalogItemId || '').trim();
+      const catalogItem = catalogMap.get(catalogItemId);
+      const cantidad = toNumber(linea.cantidad, 1);
+      const precioOverride = linea.precio_unitario ?? linea.precioUnitario ?? null;
+      const calc = calcularLinea(catalogItem, cantidad, precioOverride);
+      const serieIds = linea.serie_ids || linea.serieIds || [];
+      const productoSerieId = Array.isArray(serieIds) && serieIds.length === 1 ? serieIds[0] : null;
+
+      return {
+        catalogItemId,
+        productoSerieId,
+        catalogItem,
+        ...calc,
+      };
+    });
+
+    totalesJson = {
+      meta_emision: {
+        almacen_id: String(body.almacen_id || body.almacenId || '').trim() || null,
+        lineas_inventario: lineas.map((linea) => {
+          const catalogItemId = String(linea.catalog_item_id || linea.catalogItemId || '').trim();
+          const entry = {
+            catalog_item_id: catalogItemId,
+            cantidad: toNumber(linea.cantidad, 1),
+          };
+          const serieIds = linea.serie_ids || linea.serieIds;
+          const series = linea.series || linea.numeros_serie || linea.numerosSerie;
+          if (serieIds) entry.serie_ids = serieIds;
+          if (series) entry.series = series;
+          return entry;
+        }),
+      },
+    };
+  }
+
+  const totales = tipoConfig.tipoDoc === '09'
+    ? {
+        mtoOperGravadas: 0,
+        mtoOperExoneradas: 0,
+        mtoOperInafectas: 0,
+        mtoIgv: 0,
+        totalImpuestos: 0,
+        subTotal: 0,
+        mtoImpVenta: 0,
+      }
+    : calcularTotales(saleDetails);
+
+  const clienteId = await resolveClienteId(companyRuc, receptor);
+  const correlativo = await getNextCorrelativo(companyRuc, tipoConfig.tipoDoc, tipoConfig.serie);
+
+  let documentoAfectadoId = null;
+  let motivoCodigo = null;
+  let motivoNota = (body.motivo_nota || body.motivoNota || '').trim() || null;
+
+  if (tipoConfig.tipoDoc === '07' || tipoConfig.tipoDoc === '08') {
+    documentoAfectadoId = await resolveDocumentoAfectadoId(companyRuc, body.documento_afectado || body.documentoAfectado);
+    motivoCodigo = String(body.motivo_codigo || body.motivoCodigo || '01').trim();
+    if (!motivoNota) throw new Error('motivo_nota es obligatorio para notas.');
+  }
+
+  const invoiceId = randomUUID();
+
+  await prisma.$transaction(async (tx) => {
+    await tx.invoice.create({
+      data: {
+        id: invoiceId,
+        companyRuc,
+        tipoDoc: tipoConfig.tipoDoc,
+        serie: tipoConfig.serie,
+        correlativo,
+        fechaEmision: toStoredTimestamp(),
+        tipoMoneda: 'PEN',
+        formaPago: 'Contado',
+        observacion: (body.observaciones || body.observacion || '').trim() || null,
+        mtoOperGravadas: totales.mtoOperGravadas,
+        mtoOperExoneradas: totales.mtoOperExoneradas,
+        mtoOperInafectas: totales.mtoOperInafectas,
+        mtoIgv: totales.mtoIgv,
+        totalImpuestos: totales.totalImpuestos,
+        subTotal: totales.subTotal,
+        mtoImpVenta: totales.mtoImpVenta,
+        totalesJson,
+        motivoCodigo,
+        motivoNota,
+        documentoAfectadoId,
+        estado: 'BORRADOR',
+        clienteId,
+        details: {
+          create: saleDetails.map((detail) => ({
+            catalogItemId: detail.catalogItemId,
+            descripcion: detail.descripcion,
+            nombre: detail.nombre,
+            cantidad: detail.cantidad,
+            unidad: detail.unidad,
+            mtoPrecioUnitario: detail.mtoPrecioUnitario,
+            tipAfeIgv: detail.tipAfeIgv,
+            mtoValorVenta: detail.mtoValorVenta,
+            mtoIgv: detail.mtoIgv,
+            totalFactura: detail.totalFactura,
+            mtoValorUnitario: detail.mtoValorUnitario,
+            mtoBaseIgv: detail.mtoBaseIgv,
+            porcentajeIgv: detail.porcentajeIgv,
+            productoSerieId: detail.productoSerieId,
+          })),
+        },
+      },
+    });
+  });
+
+  return findByIdForEmission(invoiceId, companyRuc);
+}
+
+async function findAllByCompany(companyRuc, { desde = null, hasta = null, apiBaseUrl = null } = {}) {
+  const rows = await prisma.invoice.findMany({
+    where: { companyRuc },
+    include: INVOICE_INCLUDE,
+  });
+
+  let filtered = rows;
+  if (desde || hasta) {
+    const desdeMs = desde ? calendarDayStartMsPe(desde) : null;
+    const hastaMs = hasta ? calendarDayEndMsPe(hasta) : null;
+
+    filtered = rows.filter((row) => {
+      const ms = Number.parseInt(String(row.fechaEmision || ''), 10);
+      if (!Number.isFinite(ms)) return false;
+      if (desdeMs != null && ms < desdeMs) return false;
+      if (hastaMs != null && ms > hastaMs) return false;
+      return true;
+    });
+  }
+
+  filtered.sort((a, b) => {
+    const byFecha = compareStoredTimestamps(b.fechaEmision, a.fechaEmision);
+    if (byFecha !== 0) return byFecha;
+    const serieCmp = String(a.serie || '').localeCompare(String(b.serie || ''));
+    if (serieCmp !== 0) return serieCmp;
+    return String(b.correlativo || '').localeCompare(String(a.correlativo || ''), undefined, {
+      numeric: true,
+    });
+  });
+
+  return filtered.map((row) =>
+    toApiInvoice(row, { apiBaseUrl, companyRuc, includeSunatPayload: false }),
+  );
 }
 
 async function findAll() {
@@ -40,9 +749,165 @@ async function findAll() {
     include: {
       cliente: { select: { razonSocial: true, numeroDoc: true, tipoDoc: true } },
     },
-    orderBy: [{ fechaEmision: 'desc' }, { serie: 'asc' }, { correlativo: 'desc' }],
   });
-  return rows.map(toPublic);
+  rows.sort((a, b) => {
+    const byFecha = compareStoredTimestamps(b.fechaEmision, a.fechaEmision);
+    if (byFecha !== 0) return byFecha;
+    return String(b.correlativo || '').localeCompare(String(a.correlativo || ''), undefined, {
+      numeric: true,
+    });
+  });
+  return rows.map(toPublicSummary);
 }
 
-module.exports = { findAll, toPublic };
+async function findByIdForEmission(id, companyRuc) {
+  const invoice = await prisma.invoice.findFirst({
+    where: { id, companyRuc },
+    include: INVOICE_INCLUDE,
+  });
+
+  if (!invoice) return null;
+
+  const company = await prisma.company.findFirst({
+    where: { ruc: companyRuc },
+    include: { address: true },
+  });
+
+  return { ...invoice, company };
+}
+
+async function ensurePdfAtEmission(invoice, estado, apiBaseUrl) {
+  if (!invoice || estado === 'BORRADOR') return null;
+
+  try {
+    const buffer = await comprobantePdfService.generarPdfBuffer({ ...invoice, estado });
+    if (!buffer?.length) return null;
+    const saved = await comprobanteArchivosService.persistGeneratedPdf(invoice, buffer, apiBaseUrl);
+    return saved?.url || null;
+  } catch (err) {
+    console.warn('[comprobante] No se pudo generar/subir PDF al emitir:', err.message);
+    return null;
+  }
+}
+
+async function applyEmisionResult(id, companyRuc, tipoDoc, emisorData, options = {}) {
+  const estado = mapEstadoEmision(tipoDoc, emisorData);
+  const current = await findByIdForEmission(id, companyRuc);
+
+  const persisted = current
+    ? await comprobanteArchivosService.persistEmisorArchivos(
+        current,
+        emisorData,
+        options.apiBaseUrl,
+      )
+    : {
+        pdfUrl: null,
+        cdrZipUrl: null,
+        xmlUrlDirecto: null,
+        hash: null,
+      };
+
+  const sunatNotas = emisorData.observaciones ?? null;
+
+  let pdfUrl = persisted.pdfUrl;
+  if (!pdfUrl && current && estado !== 'BORRADOR') {
+    pdfUrl = await ensurePdfAtEmission({ ...current, estado }, estado, options.apiBaseUrl);
+  }
+
+  const updated = await prisma.invoice.update({
+    where: { id },
+    data: {
+      estado,
+      cdrEstado: emisorData.estado || null,
+      sunatEstadoDirecto: emisorData.estado || null,
+      sunatCodigoDirecto:
+        emisorData.codigo_cdr != null
+          ? String(emisorData.codigo_cdr)
+          : emisorData.error?.codigo != null
+            ? String(emisorData.error.codigo)
+            : null,
+      sunatDescripcionDirecto:
+        emisorData.descripcion ||
+        emisorData.mensaje ||
+        emisorData.error?.mensaje ||
+        emisorData.error?.descripcion ||
+        null,
+      sunatNotasDirecto: sunatNotas,
+      sunatJson: emisorData,
+      pdfUrl: pdfUrl || undefined,
+      cdrZipUrl: persisted.cdrZipUrl || undefined,
+      xmlUrlDirecto: persisted.xmlUrlDirecto || undefined,
+      hash: persisted.hash || undefined,
+      archivosJson: null,
+    },
+    include: INVOICE_INCLUDE,
+  });
+
+  return toApiInvoice(updated, options);
+}
+
+async function getArchivoBuffer(invoice, tipo, options = {}) {
+  const formato = String(options.formato || 'a4').trim().toLowerCase();
+
+  if (tipo === 'pdf' && (formato === 'ticket' || formato === 'thermal')) {
+    const estado = resolveEstadoApi(invoice);
+    if (estado === 'BORRADOR') return null;
+    const buffer = await comprobantePdfService.generarPdfBuffer({ ...invoice, estado }, formato);
+    return { buffer, contentType: 'application/pdf', ext: 'pdf' };
+  }
+
+  const stored = await comprobanteArchivosService.getArchivoBuffer(invoice, tipo);
+  if (stored) return stored;
+
+  const estado = resolveEstadoApi(invoice);
+  if (tipo === 'pdf' && estado !== 'BORRADOR') {
+    const buffer = await comprobantePdfService.generarPdfBuffer({ ...invoice, estado }, formato);
+    if (buffer && formato === 'a4' && !invoice.pdfUrl && options.apiBaseUrl) {
+      const saved = await comprobanteArchivosService.persistGeneratedPdf(
+        invoice,
+        buffer,
+        options.apiBaseUrl,
+      );
+      if (saved?.url) {
+        await prisma.invoice.update({
+          where: { id: invoice.id },
+          data: { pdfUrl: saved.url, archivosJson: null },
+        });
+      }
+    }
+    return { buffer, contentType: 'application/pdf', ext: 'pdf' };
+  }
+
+  return null;
+}
+
+async function deleteDraftInvoice(id, companyRuc) {
+  const row = await prisma.invoice.findFirst({
+    where: { id, companyRuc, estado: 'BORRADOR' },
+    select: { id: true },
+  });
+  if (!row) return false;
+
+  await prisma.invoice.updateMany({
+    where: { documentoAfectadoId: id },
+    data: { documentoAfectadoId: null },
+  });
+  await prisma.invoice.delete({ where: { id } });
+  return true;
+}
+
+module.exports = {
+  findAll,
+  findAllByCompany,
+  findByIdForEmission,
+  findCompany,
+  getNextResumenCorrelativo,
+  findBoletasPendientesResumen,
+  marcarBoletasResumidas,
+  createFromMobileRequest,
+  deleteDraftInvoice,
+  applyEmisionResult,
+  toApiInvoice,
+  getArchivoBuffer,
+  toPublic: toPublicSummary,
+};

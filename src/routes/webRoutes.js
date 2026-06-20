@@ -6,6 +6,7 @@ const comprobanteWebController = require('../controllers/comprobanteWebControlle
 const clienteWebController = require('../controllers/clienteWebController');
 const catalogItemWebController = require('../controllers/catalogItemWebController');
 const almacenWebController = require('../controllers/almacenWebController');
+const uploadCertificado = require('../middleware/uploadCertificado');
 
 const router = express.Router();
 
@@ -22,9 +23,9 @@ router.post('/usuarios/:id/eliminar', usuarioWebController.destroy);
 
 router.get('/companies', companyWebController.list);
 router.get('/companies/crear', companyWebController.showCreateForm);
-router.post('/companies', companyWebController.create);
+router.post('/companies', uploadCertificado.single('certificado'), companyWebController.create);
 router.get('/companies/:id/editar', companyWebController.showEditForm);
-router.post('/companies/:id', companyWebController.update);
+router.post('/companies/:id', uploadCertificado.single('certificado'), companyWebController.update);
 router.post('/companies/:id/activar', companyWebController.activate);
 router.post('/companies/:id/desactivar', companyWebController.deactivate);
 router.post('/companies/:id/eliminar', companyWebController.destroy);

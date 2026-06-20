@@ -13,6 +13,10 @@ app.use(cors());
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 app.use(express.static(path.join(__dirname, '../public')));
+app.use(
+  '/storage/comprobantes',
+  express.static(path.join(__dirname, '../storage/comprobantes')),
+);
 
 app.use('/', webRoutes);
 app.use('/api', apiRoutes);

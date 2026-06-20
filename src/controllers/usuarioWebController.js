@@ -15,8 +15,7 @@ async function loadCompanies() {
 
 async function loadAlmacenes() {
   return prisma.almacen.findMany({
-    where: { activo: true },
-    select: { id: true, nombre: true, codigo: true, companyRuc: true },
+    select: { id: true, nombre: true, codigo: true, companyRuc: true, activo: true },
     orderBy: [{ companyRuc: 'asc' }, { nombre: 'asc' }],
   });
 }

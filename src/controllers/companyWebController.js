@@ -1,4 +1,10 @@
 const companyModel = require('../models/companyModel');
+const {
+  buildSeriesConfigFromBody,
+  seriesConfigToFormFields,
+  defaultSeriesConfig,
+  validateSeriesConfig,
+} = require('../utils/seriesConfig');
 const { parseListQuery, buildPageMeta } = require('../utils/pagination');
 
 function parseFlash(req) {
@@ -43,6 +49,12 @@ function formFromBody(body) {
     distrito: body.distrito || '',
     direccion: body.direccion || '',
     codLocal: body.codLocal || '0000',
+    solUser: body.solUser || '',
+    solPass: '',
+    certificatePassword: '',
+    tieneCertificado: body.tieneCertificado === 'on' || body.tieneCertificado === 'true',
+    rutaFirma: body.rutaFirma || '',
+    ...seriesConfigToFormFields(buildSeriesConfigFromBody(body) || defaultSeriesConfig()),
   };
 }
 
@@ -68,6 +80,14 @@ function formFromCompany(company) {
     distrito: c.address?.distrito || '',
     direccion: c.address?.direccion || '',
     codLocal: c.address?.codLocal || '0000',
+    solUser: c.solUser || '',
+    solPass: '',
+    certificatePassword: '',
+    tieneCertificado: c.tieneCertificado === true,
+    rutaFirma: c.rutaFirma || '',
+    tieneSolPass: c.tieneSolPass,
+    tieneCertificatePassword: c.tieneCertificatePassword,
+    ...seriesConfigToFormFields(c.seriesConfig),
   };
 }
 
@@ -110,7 +130,7 @@ async function showCreateForm(req, res, next) {
     res.render('companies/crear', {
       title: 'Nueva empresa',
       error: null,
-      form: formFromBody({ activo: 'on', isActive: 'on', tipoDoc: '6', entorno: 'beta' }),
+      form: formFromBody({ activo: 'on', isActive: 'on', tipoDoc: '6', entorno: 'beta', ...seriesConfigToFormFields(defaultSeriesConfig()) }),
     });
   } catch (err) {
     next(err);
@@ -131,9 +151,19 @@ async function create(req, res, next) {
       return renderError('Ya existe una empresa con ese RUC.');
     }
 
-    await companyModel.create(req.body);
+    const seriesError = validateSeriesConfig(buildSeriesConfigFromBody(req.body));
+    if (seriesError) return renderError(seriesError);
+
+    await companyModel.create(req.body, { certFile: req.file || null });
     return redirectList(res, `Empresa ${form.nombre} creada correctamente.`);
   } catch (err) {
+    if (err.message && /certificado|R2\/S3|\.pfx/i.test(err.message)) {
+      return res.render('companies/crear', {
+        title: 'Nueva empresa',
+        error: err.message,
+        form: formFromBody(req.body),
+      });
+    }
     next(err);
   }
 }
@@ -181,9 +211,35 @@ async function update(req, res, next) {
       return renderError('Ese RUC ya está registrado en otra empresa.');
     }
 
-    await companyModel.update(id, req.body);
+    const seriesError = validateSeriesConfig(buildSeriesConfigFromBody(req.body));
+    if (seriesError) return renderError(seriesError);
+
+    await companyModel.update(id, req.body, {
+      certFile: req.file || null,
+      existing: company,
+    });
     return redirectList(res, `Empresa ${form.nombre} actualizada.`);
   } catch (err) {
+    if (err.message && /certificado|R2\/S3|\.pfx/i.test(err.message)) {
+      const form = formFromBody(req.body);
+      const id = parseId(req.params.id);
+      if (id) {
+        const company = await companyModel.findById(id);
+        if (company) {
+          return res.render('companies/editar', {
+            title: 'Editar empresa',
+            error: err.message,
+            company: companyModel.toPublic(company),
+            form: { ...formFromCompany(company), ...form },
+          });
+        }
+      }
+      return res.render('companies/crear', {
+        title: 'Nueva empresa',
+        error: err.message,
+        form,
+      });
+    }
     next(err);
   }
 }

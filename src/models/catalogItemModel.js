@@ -4,6 +4,14 @@ const inventarioModel = require('./inventarioModel');
 
 const KINDS = ['PRODUCT', 'SERVICE'];
 
+function unidadPermiteSerie(unidad) {
+  return String(unidad || 'NIU').toUpperCase() === 'NIU';
+}
+
+function usaSeriesInventario(item) {
+  return Boolean(item?.manejaSerie && unidadPermiteSerie(item.unidad));
+}
+
 function toNumber(value) {
   if (value == null) return null;
   const n = Number(value);
@@ -209,7 +217,8 @@ async function findByCodigoExceptId(companyRuc, codigo, id) {
 
 async function create(body, id = randomUUID()) {
   const data = parseBody(body);
-  const manejaSerie = data.kind === 'PRODUCT' ? data.manejaSerie : false;
+  let manejaSerie = data.kind === 'PRODUCT' ? data.manejaSerie : false;
+  if (!unidadPermiteSerie(data.unidad)) manejaSerie = false;
   const manejaStock = data.kind === 'PRODUCT' ? data.manejaStock || manejaSerie : false;
   const row = await prisma.catalogItem.create({
     data: {
@@ -234,7 +243,8 @@ async function create(body, id = randomUUID()) {
 
 async function update(id, body) {
   const data = parseBody(body);
-  const manejaSerie = data.kind === 'PRODUCT' ? data.manejaSerie : false;
+  let manejaSerie = data.kind === 'PRODUCT' ? data.manejaSerie : false;
+  if (!unidadPermiteSerie(data.unidad)) manejaSerie = false;
   const manejaStock = data.kind === 'PRODUCT' ? data.manejaStock || manejaSerie : false;
   return prisma.catalogItem.update({
     where: { id },

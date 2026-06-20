@@ -4,6 +4,10 @@ const {
   signAccessToken,
   generateRefreshToken,
 } = require('../utils/tokens');
+const {
+  loadCompanyForSession,
+  buildConfiguracion,
+} = require('./sessionConfigService');
 
 function buildAccessToken(user) {
   return signAccessToken({
@@ -76,17 +80,28 @@ async function issueTokens(user) {
   return sessionPayload(await usuarioModel.findById(user.id));
 }
 
-function sessionPayload(updated) {
+async function sessionPayload(updated) {
   if (!updated) {
     const err = new Error('Usuario no encontrado');
     err.status = 404;
     throw err;
   }
 
+  const companyFull = await loadCompanyForSession(updated.companyId);
+  const configuracion = await buildConfiguracion(companyFull);
+
   const almacenId =
     updated.almacenId != null ? String(updated.almacenId) : null;
   const almacenNombre = updated.almacen?.nombre ?? null;
   const almacenCodigo = updated.almacen?.codigo ?? null;
+
+  const empresaPublica = configuracion?.empresa
+    ?? (updated.company
+      ? {
+          ruc: updated.company.ruc,
+          nombre: updated.company.nombre || 'Empresa',
+        }
+      : null);
 
   return {
     accessToken: updated.token,
@@ -95,16 +110,12 @@ function sessionPayload(updated) {
     almacenId,
     almacenNombre,
     almacenCodigo,
+    configuracion,
     user: {
       ...usuarioModel.toPublicUser(updated),
-      company: updated.company
-        ? {
-            ruc: updated.company.ruc,
-            nombre: updated.company.nombre || 'Empresa',
-          }
-        : null,
-      companyRuc: updated.company?.ruc ?? null,
-      companyNombre: updated.company?.nombre ?? null,
+      company: empresaPublica,
+      companyRuc: empresaPublica?.ruc ?? updated.company?.ruc ?? null,
+      companyNombre: empresaPublica?.nombre ?? updated.company?.nombre ?? null,
       rol: updated.rol,
       almacenId,
       almacenNombre,
