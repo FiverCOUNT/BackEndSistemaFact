@@ -35,7 +35,7 @@ function resolveInventarioEmitOptions(invoice, options = {}) {
 
   return {
     ...options,
-    almacenId: options.almacenId || meta?.almacen_id || null,
+    almacenId: meta?.almacen_id || options.almacenId || null,
     lineasBody: options.lineasBody || meta?.lineas_inventario || null,
   };
 }

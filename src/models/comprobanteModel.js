@@ -1,6 +1,7 @@
 const { randomUUID } = require('crypto');
 const prisma = require('../config/prisma');
 const clienteModel = require('./clienteModel');
+const productoSerieModel = require('./productoSerieModel');
 const comprobanteArchivosService = require('../services/comprobanteArchivosService');
 const comprobantePdfService = require('../services/comprobantePdfService');
 const {
@@ -37,13 +38,15 @@ const COD_TO_TIPO = {
   '09': 'GUIA_EMISION',
 };
 
+const DETAIL_INCLUDE = {
+  include: { catalogItem: true, productoSerie: true },
+};
+
 const INVOICE_INCLUDE = {
   cliente: {
     include: { address: true },
   },
-  details: {
-    include: { catalogItem: true },
-  },
+  details: DETAIL_INCLUDE,
   legends: true,
   documentoAfectado: {
     select: { id: true, tipoDoc: true, serie: true, correlativo: true },
@@ -324,6 +327,77 @@ async function resolveDocumentoAfectadoId(companyRuc, documentoAfectado) {
   return row.id;
 }
 
+function buildLineasLimitePorDocumento(details) {
+  const byCatalog = new Map();
+  for (const detail of details || []) {
+    const catalogItemId = String(detail.catalogItemId || '').trim();
+    if (!catalogItemId) continue;
+    const cantidad = toNumber(detail.cantidad);
+    const precio = toNumber(detail.mtoPrecioUnitario);
+    const nombre = detail.nombre || detail.descripcion || catalogItemId;
+    const prev = byCatalog.get(catalogItemId);
+    if (prev) {
+      prev.cantidad = round4(prev.cantidad + cantidad);
+      prev.precioMax = Math.max(prev.precioMax, precio);
+    } else {
+      byCatalog.set(catalogItemId, { cantidad, precioMax: precio, nombre });
+    }
+  }
+  return byCatalog;
+}
+
+async function validateNotaCreditoLineas(companyRuc, documentoAfectadoId, saleDetails, lineasBody = []) {
+  const doc = await prisma.invoice.findFirst({
+    where: { id: documentoAfectadoId, companyRuc },
+    include: { details: true },
+  });
+  if (!doc) throw new Error('documento_afectado no encontrado.');
+
+  const limites = buildLineasLimitePorDocumento(doc.details);
+  if (limites.size === 0) {
+    throw new Error('El documento afectado no tiene líneas para acreditar.');
+  }
+
+  const acreditadas = new Map();
+  for (let i = 0; i < saleDetails.length; i += 1) {
+    const detail = saleDetails[i];
+    const catalogItemId = String(detail.catalogItemId || '').trim();
+    if (!catalogItemId) {
+      throw new Error('Cada línea de la nota de crédito debe referenciar un producto del documento afectado.');
+    }
+
+    const limite = limites.get(catalogItemId);
+    if (!limite) {
+      throw new Error(
+        `El producto "${detail.nombre || catalogItemId}" no está en el documento afectado. `
+          + 'La nota de crédito solo puede incluir ítems de esa factura o boleta.',
+      );
+    }
+
+    const prev = acreditadas.get(catalogItemId) || 0;
+    acreditadas.set(catalogItemId, round4(prev + toNumber(detail.cantidad)));
+
+    const lineaBody = lineasBody[i];
+    const precioOverride = lineaBody?.precio_unitario ?? lineaBody?.precioUnitario ?? null;
+    if (precioOverride == null || precioOverride === '') continue;
+    if (toNumber(precioOverride) > limite.precioMax + 0.009) {
+      throw new Error(
+        `El monto a acreditar de "${limite.nombre}" no puede superar el precio facturado.`,
+      );
+    }
+  }
+
+  for (const [catalogItemId, cantidadAcreditar] of acreditadas) {
+    const limite = limites.get(catalogItemId);
+    if (!limite) continue;
+    if (cantidadAcreditar > limite.cantidad + 0.0001) {
+      throw new Error(
+        `La cantidad a acreditar de "${limite.nombre}" no puede superar la facturada (${limite.cantidad}).`,
+      );
+    }
+  }
+}
+
 async function loadCatalogItems(companyRuc, lineas) {
   const ids = [...new Set(lineas.map((l) => String(l.catalog_item_id || l.catalogItemId || '').trim()))];
   if (!ids.length || ids.some((id) => !id)) {
@@ -343,7 +417,7 @@ async function loadCatalogItems(companyRuc, lineas) {
 }
 
 function toApiSaleDetail(detail) {
-  return {
+  const row = {
     id: detail.id,
     invoice_id: detail.invoiceId,
     catalog_item_id: detail.catalogItemId,
@@ -361,6 +435,10 @@ function toApiSaleDetail(detail) {
     porcentaje_igv: toNumber(detail.porcentajeIgv),
     producto_serie_id: detail.productoSerieId,
   };
+  if (detail.productoSerie) {
+    row.producto_serie = productoSerieModel.toApi(detail.productoSerie);
+  }
+  return row;
 }
 
 function formatMoney(value) {
@@ -655,6 +733,10 @@ async function createFromMobileRequest(companyRuc, body) {
     documentoAfectadoId = await resolveDocumentoAfectadoId(companyRuc, body.documento_afectado || body.documentoAfectado);
     motivoCodigo = String(body.motivo_codigo || body.motivoCodigo || '01').trim();
     if (!motivoNota) throw new Error('motivo_nota es obligatorio para notas.');
+  }
+
+  if (tipoConfig.tipoDoc === '07') {
+    await validateNotaCreditoLineas(companyRuc, documentoAfectadoId, saleDetails, lineas);
   }
 
   const invoiceId = randomUUID();

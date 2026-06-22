@@ -60,7 +60,70 @@ async function findDisponibles({ companyRuc, catalogItemId, almacenId }) {
   return rows.map(toApi);
 }
 
+/**
+ * Series entregadas al cliente en la venta asociada a un comprobante (factura/boleta).
+ * Fuente: salida de inventario vinculada al comprobante y, en respaldo, series en sale_details.
+ */
+async function findEntregadasPorComprobante(companyRuc, comprobanteId) {
+  const invoice = await prisma.invoice.findFirst({
+    where: { id: comprobanteId, companyRuc },
+    select: { id: true },
+  });
+  if (!invoice) return { error: 'comprobante_not_found' };
+
+  const byItem = new Map();
+
+  const addSerie = (serie) => {
+    if (!serie?.catalogItemId) return;
+    if (!byItem.has(serie.catalogItemId)) {
+      byItem.set(serie.catalogItemId, []);
+    }
+    const list = byItem.get(serie.catalogItemId);
+    if (!list.some((row) => row.id === serie.id)) {
+      list.push(serie);
+    }
+  };
+
+  const salida = await prisma.movimiento.findFirst({
+    where: { companyRuc, comprobanteId, tipo: 'SALIDA' },
+    select: { id: true },
+  });
+
+  if (salida) {
+    const series = await prisma.productoSerie.findMany({
+      where: {
+        companyRuc,
+        entregaId: salida.id,
+        estado: 'ENTREGADO',
+      },
+      orderBy: { numeroSerie: 'asc' },
+    });
+    series.forEach(addSerie);
+  }
+
+  const details = await prisma.saleDetail.findMany({
+    where: {
+      invoiceId: comprobanteId,
+      productoSerieId: { not: null },
+    },
+    include: { productoSerie: true },
+  });
+  for (const detail of details) {
+    if (detail.productoSerie) addSerie(detail.productoSerie);
+  }
+
+  const items = [...byItem.entries()]
+    .map(([catalogItemId, series]) => ({
+      catalog_item_id: catalogItemId,
+      series: series.map(toApi),
+    }))
+    .sort((a, b) => a.catalog_item_id.localeCompare(b.catalog_item_id));
+
+  return { items };
+}
+
 module.exports = {
   toApi,
   findDisponibles,
+  findEntregadasPorComprobante,
 };

@@ -34,6 +34,7 @@ router.get('/comprobantes', comprobanteApiController.list);
 router.post('/comprobantes', comprobanteApiController.crearYEmitir);
 router.post('/comprobantes/resumen', comprobanteApiController.enviarResumen);
 router.get('/comprobantes/:id/archivos/:tipo', comprobanteApiController.descargarArchivo);
+router.get('/comprobantes/:id/series-entregadas', comprobanteApiController.listSeriesEntregadas);
 router.get('/comprobantes/:id', comprobanteApiController.getById);
 router.post('/comprobantes/:id/emitir', comprobanteApiController.emitir);
 

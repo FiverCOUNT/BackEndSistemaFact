@@ -17,13 +17,24 @@ async function uploadCertificado(companyRuc, file) {
   }
 
   const filename = resolveCertFilename(companyRuc, file.originalname);
-  const result = await objectStorageService.uploadCertificado(companyRuc, file.buffer, filename);
 
-  return {
-    key: result.key,
-    url: result.url,
-    filename,
-  };
+  try {
+    const result = await objectStorageService.uploadCertificado(companyRuc, file.buffer, filename);
+    return {
+      key: result.key,
+      url: result.url,
+      filename,
+    };
+  } catch (err) {
+    if (err?.Code === 'AccessDenied' || err?.name === 'AccessDenied') {
+      throw new Error(
+        'Cloudflare R2 rechazó la subida: el API token solo tiene lectura. '
+          + 'En Cloudflare → R2 → Manage API Tokens, crea uno con permiso "Object Read & Write" '
+          + 'sobre el bucket sistemafacturacion y actualiza S3_ACCESS_KEY_ID / S3_SECRET_ACCESS_KEY en .env.',
+      );
+    }
+    throw err;
+  }
 }
 
 module.exports = {

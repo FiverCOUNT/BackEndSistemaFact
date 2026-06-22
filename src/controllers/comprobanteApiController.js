@@ -1,6 +1,12 @@
 const comprobanteModel = require('../models/comprobanteModel');
+const productoSerieModel = require('../models/productoSerieModel');
 const comprobanteEmisionService = require('../services/comprobanteEmisionService');
 const emisorClient = require('../services/emisorClient');
+const {
+  readAlmacenFromBody,
+  readAlmacenFromQuery,
+  normalizeAlmacenId,
+} = require('../utils/almacenAccess');
 
 const TIPOS_EMITIBLES = comprobanteEmisionService.TIPOS_EMITIBLES;
 const ESTADOS_REEMITIBLES = comprobanteEmisionService.ESTADOS_REEMITIBLES;
@@ -9,11 +15,12 @@ function apiBaseFromRequest(req) {
   return `${req.protocol}://${req.get('host')}`;
 }
 
+/** Almacén efectivo: body/query explícito primero; almacén del usuario solo como fallback. */
 function serializeOptions(req) {
   const almacenId =
-    req.userAlmacenId
-    || (req.body?.almacen_id || req.body?.almacenId || req.query?.almacen_id || '').trim()
-    || null;
+    readAlmacenFromBody(req)
+    || readAlmacenFromQuery(req)
+    || normalizeAlmacenId(req.userAlmacenId);
 
   return {
     apiBaseUrl: apiBaseFromRequest(req),
@@ -67,6 +74,22 @@ async function getById(req, res, next) {
     }
 
     res.json(comprobanteModel.toApiInvoice(invoice, serializeOptions(req)));
+  } catch (err) {
+    next(err);
+  }
+}
+
+/** Series entregadas al cliente en la venta (para NC de devolución). */
+async function listSeriesEntregadas(req, res, next) {
+  try {
+    const result = await productoSerieModel.findEntregadasPorComprobante(
+      req.companyRuc,
+      req.params.id,
+    );
+    if (result.error === 'comprobante_not_found') {
+      return res.status(404).json({ success: false, message: 'Comprobante no encontrado' });
+    }
+    res.json(result.items);
   } catch (err) {
     next(err);
   }
@@ -210,6 +233,7 @@ module.exports = {
   crearYEmitir,
   list,
   getById,
+  listSeriesEntregadas,
   descargarArchivo,
   emitir,
   enviarResumen,

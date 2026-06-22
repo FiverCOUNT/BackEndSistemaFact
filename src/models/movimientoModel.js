@@ -31,6 +31,12 @@ function usaInventarioCantidad(item, linea) {
   return item.kind === 'PRODUCT' && !lineaUsaSeries(item, linea);
 }
 
+/** Devolución NC / cliente: solo productos con stock o serie; no servicios. */
+function itemAfectaInventarioDevolucion(item) {
+  if (!item || item.kind === 'SERVICE') return false;
+  return Boolean(item.manejaStock || usaSeriesInventario(item));
+}
+
 function normalizeStringArray(value) {
   if (!value) return [];
   if (Array.isArray(value)) {
@@ -242,7 +248,18 @@ async function registrarEntrada({
   });
   const itemsById = new Map(items.map((i) => [i.id, i]));
 
-  for (const linea of parsedLineas) {
+  let lineasEfectivas = parsedLineas;
+  if (esDevolucion) {
+    lineasEfectivas = parsedLineas.filter((linea) => {
+      const item = itemsById.get(linea.catalogItemId);
+      return item && itemAfectaInventarioDevolucion(item);
+    });
+    if (lineasEfectivas.length === 0) {
+      return { error: 'lineas_vacias' };
+    }
+  }
+
+  for (const linea of lineasEfectivas) {
     const item = itemsById.get(linea.catalogItemId);
     if (!item) return { error: 'item_not_found', catalogItemId: linea.catalogItemId };
     if (item.activo === false) {
@@ -280,7 +297,7 @@ async function registrarEntrada({
     await prisma.$transaction(async (tx) => {
       const numero = await nextNumeroEntrada(companyRuc, tx);
 
-      for (const linea of parsedLineas) {
+      for (const linea of lineasEfectivas) {
         const item = itemsById.get(linea.catalogItemId);
         const ingresaSeries = lineaUsaSeries(item, linea);
         const afectaSaldo = usaInventarioCantidad(item, linea);

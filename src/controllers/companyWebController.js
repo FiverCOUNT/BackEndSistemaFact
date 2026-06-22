@@ -157,7 +157,7 @@ async function create(req, res, next) {
     await companyModel.create(req.body, { certFile: req.file || null });
     return redirectList(res, `Empresa ${form.nombre} creada correctamente.`);
   } catch (err) {
-    if (err.message && /certificado|R2\/S3|\.pfx/i.test(err.message)) {
+    if (err.message && /certificado|R2\/S3|Cloudflare R2|\.pfx|Access Denied/i.test(err.message)) {
       return res.render('companies/crear', {
         title: 'Nueva empresa',
         error: err.message,
@@ -220,7 +220,7 @@ async function update(req, res, next) {
     });
     return redirectList(res, `Empresa ${form.nombre} actualizada.`);
   } catch (err) {
-    if (err.message && /certificado|R2\/S3|\.pfx/i.test(err.message)) {
+    if (err.message && /certificado|R2\/S3|Cloudflare R2|\.pfx|Access Denied/i.test(err.message)) {
       const form = formFromBody(req.body);
       const id = parseId(req.params.id);
       if (id) {
