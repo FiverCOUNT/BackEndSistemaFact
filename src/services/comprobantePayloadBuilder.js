@@ -309,9 +309,56 @@ function buildResumenPayload(company, boletas, correlativoResumen = '001') {
   };
 }
 
+function buildGuiaTransportistaPayload(invoice) {
+  if (!invoice.details?.length) {
+    throw new Error('La guía transportista no tiene líneas de detalle.');
+  }
+
+  const company = invoice.company;
+  if (!company) throw new Error('No se encontró la empresa emisora.');
+  if (!invoice.cliente) throw new Error('La guía requiere destinatario.');
+
+  const meta = invoice.totalesJson && typeof invoice.totalesJson === 'object'
+    ? invoice.totalesJson
+    : {};
+  const remitente = meta.remitente;
+  if (!remitente?.numero_doc) {
+    throw new Error('La guía transportista no tiene remitente registrado.');
+  }
+
+  const payload = {
+    version: '2022',
+    serie: invoice.serie,
+    correlativo: String(invoice.correlativo),
+    fecha_emision: formatFechaEmision(invoice.fechaEmision),
+    emisor: buildEmisor(company),
+    remitente: {
+      tipo_doc: remitente.tipo_doc || '6',
+      num_doc: remitente.numero_doc,
+      razon_social: remitente.razon_social,
+    },
+    destinatario: buildReceptor(invoice.cliente),
+    envio: resolveEnvio(invoice),
+    detalles: invoice.details.map((detail, index) => buildDetalleGuia(detail, detail.catalogItem, index)),
+  };
+
+  if (meta.guia_remitente?.serie && meta.guia_remitente?.correlativo) {
+    payload.documentos_relacionados = [{
+      tipo_doc: meta.guia_remitente.tipo_doc || '09',
+      serie: meta.guia_remitente.serie,
+      correlativo: String(meta.guia_remitente.correlativo),
+    }];
+  }
+
+  return payload;
+}
+
 function buildPayload(invoice) {
   if (invoice.tipoDoc === '09') {
     return buildGuiaPayload(invoice);
+  }
+  if (invoice.tipoDoc === '31') {
+    return buildGuiaTransportistaPayload(invoice);
   }
   return buildVentaPayload(invoice);
 }
@@ -320,5 +367,6 @@ module.exports = {
   buildPayload,
   buildVentaPayload,
   buildGuiaPayload,
+  buildGuiaTransportistaPayload,
   buildResumenPayload,
 };

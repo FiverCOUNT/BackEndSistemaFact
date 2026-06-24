@@ -414,3 +414,31 @@ model Invoice {
   @@index([clienteId])
   @@map("invoices")
 }
+
+/// Configuración global de la app móvil (una sola fila, id = 1).
+/// Editable desde el panel web; la app la consulta al iniciar o al refrescar.
+model Configuracion {
+  id                      Int     @id @default(1)
+  nombreApp               String  @default("FactApp") @map("nombre_app") @db.VarChar(120)
+  nombreDesarrollador     String  @default("") @map("nombre_desarrollador") @db.VarChar(255)
+  telefonosSoporte        Json?   @map("telefonos_soporte")
+  whatsappSoporte         String? @map("whatsapp_soporte") @db.VarChar(20)
+  emailSoporte            String? @map("email_soporte") @db.VarChar(255)
+  horarioSoporte          String? @map("horario_soporte") @db.VarChar(120)
+  urlActualizacion        String? @map("url_actualizacion") @db.VarChar(500)
+  urlActualizacionApk     String? @map("url_actualizacion_apk") @db.VarChar(500)
+  versionActual           String? @map("version_actual") @db.VarChar(20)
+  versionMinima           String? @map("version_minima") @db.VarChar(20)
+  notasRelease            String? @map("notas_release") @db.Text
+  mantenimientoActivo     Boolean @default(false) @map("mantenimiento_activo")
+  mensajeMantenimiento    String? @map("mensaje_mantenimiento") @db.Text
+  urlTerminos             String? @map("url_terminos") @db.VarChar(500)
+  urlPrivacidad           String? @map("url_privacidad") @db.VarChar(500)
+  urlSitioWeb             String? @map("url_sitio_web") @db.VarChar(500)
+  urlLogo                 String? @map("url_logo") @db.VarChar(500)
+  mensajeBienvenida       String? @map("mensaje_bienvenida") @db.Text
+  redesSociales           Json?   @map("redes_sociales")
+  actualizadoEn           String? @map("actualizado_en") @db.VarChar(30)
+
+  @@map("configuracion")
+}

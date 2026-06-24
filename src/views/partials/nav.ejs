@@ -68,5 +68,15 @@
         <a href="/clientes" class="<%= active === 'clientes' ? 'active' : '' %>">Listado</a>
       </div>
     </div>
+
+    <div class="nav-section <%= active && active.startsWith('configuracion') ? 'is-open' : '' %>">
+      <span class="nav-section-head">
+        <span class="nav-icon" aria-hidden="true">⚙️</span>
+        App móvil
+      </span>
+      <div class="nav-sub">
+        <a href="/configuracion" class="<%= active === 'configuracion' ? 'active' : '' %>">Configuración</a>
+      </div>
+    </div>
   </div>
 </nav>

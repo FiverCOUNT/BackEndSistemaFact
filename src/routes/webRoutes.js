@@ -6,6 +6,7 @@ const comprobanteWebController = require('../controllers/comprobanteWebControlle
 const clienteWebController = require('../controllers/clienteWebController');
 const catalogItemWebController = require('../controllers/catalogItemWebController');
 const almacenWebController = require('../controllers/almacenWebController');
+const configuracionWebController = require('../controllers/configuracionWebController');
 const uploadCertificado = require('../middleware/uploadCertificado');
 
 const router = express.Router();
@@ -50,5 +51,8 @@ router.post('/catalogo/:id/eliminar', catalogItemWebController.destroy);
 
 router.get('/comprobantes', comprobanteWebController.list);
 router.get('/clientes', clienteWebController.list);
+
+router.get('/configuracion', configuracionWebController.showEditForm);
+router.post('/configuracion', configuracionWebController.update);
 
 module.exports = router;

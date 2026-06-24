@@ -1,0 +1,130 @@
+<fieldset class="fieldset">
+  <legend>Identidad de la app</legend>
+  <div class="form-grid">
+    <div class="field">
+      <label for="nombreApp">Nombre de la app *</label>
+      <input type="text" id="nombreApp" name="nombreApp" value="<%= form.nombreApp %>" required maxlength="120" />
+    </div>
+    <div class="field">
+      <label for="nombreDesarrollador">Desarrollador / empresa *</label>
+      <input type="text" id="nombreDesarrollador" name="nombreDesarrollador" value="<%= form.nombreDesarrollador %>" required maxlength="255" />
+    </div>
+    <div class="field field-full">
+      <label for="mensajeBienvenida">Mensaje de bienvenida</label>
+      <textarea id="mensajeBienvenida" name="mensajeBienvenida" rows="2" maxlength="500"><%= form.mensajeBienvenida %></textarea>
+    </div>
+    <div class="field field-full">
+      <label for="urlLogo">URL del logo</label>
+      <input type="url" id="urlLogo" name="urlLogo" value="<%= form.urlLogo %>" placeholder="https://..." />
+    </div>
+  </div>
+</fieldset>
+
+<fieldset class="fieldset">
+  <legend>Soporte</legend>
+  <p class="field-hint field-full">Los teléfonos se muestran en la app móvil. Escribe uno por línea o sepáralos con coma.</p>
+  <div class="form-grid">
+    <div class="field field-full">
+      <label for="telefonosSoporteTexto">Teléfonos de soporte</label>
+      <textarea id="telefonosSoporteTexto" name="telefonosSoporteTexto" rows="3" placeholder="999 999 999&#10;01 234 5678"><%= form.telefonosSoporteTexto %></textarea>
+    </div>
+    <div class="field">
+      <label for="whatsappSoporte">WhatsApp</label>
+      <input type="text" id="whatsappSoporte" name="whatsappSoporte" value="<%= form.whatsappSoporte %>" placeholder="51999999999" maxlength="20" />
+    </div>
+    <div class="field">
+      <label for="emailSoporte">Email de soporte</label>
+      <input type="email" id="emailSoporte" name="emailSoporte" value="<%= form.emailSoporte %>" maxlength="255" />
+    </div>
+    <div class="field field-full">
+      <label for="horarioSoporte">Horario de atención</label>
+      <input type="text" id="horarioSoporte" name="horarioSoporte" value="<%= form.horarioSoporte %>" placeholder="Lun - Vie 9:00 a 18:00" maxlength="120" />
+    </div>
+  </div>
+</fieldset>
+
+<fieldset class="fieldset">
+  <legend>Actualizaciones</legend>
+  <div class="form-grid">
+    <div class="field">
+      <label for="versionActual">Versión publicada</label>
+      <input type="text" id="versionActual" name="versionActual" value="<%= form.versionActual %>" placeholder="1.2.0" maxlength="20" />
+    </div>
+    <div class="field">
+      <label for="versionMinima">Versión mínima obligatoria</label>
+      <input type="text" id="versionMinima" name="versionMinima" value="<%= form.versionMinima %>" placeholder="1.0.0" maxlength="20" />
+    </div>
+    <div class="field field-full">
+      <label for="urlActualizacion">URL de actualización (Play Store / web)</label>
+      <input type="url" id="urlActualizacion" name="urlActualizacion" value="<%= form.urlActualizacion %>" placeholder="https://play.google.com/store/apps/details?id=..." />
+    </div>
+    <div class="field field-full">
+      <label for="urlActualizacionApk">URL APK directo (opcional)</label>
+      <input type="url" id="urlActualizacionApk" name="urlActualizacionApk" value="<%= form.urlActualizacionApk %>" placeholder="https://..." />
+    </div>
+    <div class="field field-full">
+      <label for="notasRelease">Notas de la versión</label>
+      <textarea id="notasRelease" name="notasRelease" rows="4" placeholder="Novedades, correcciones..."><%= form.notasRelease %></textarea>
+    </div>
+  </div>
+</fieldset>
+
+<fieldset class="fieldset">
+  <legend>Mantenimiento</legend>
+  <div class="form-grid">
+    <div class="field field-check field-full">
+      <label>
+        <input type="checkbox" name="mantenimientoActivo" <%= form.mantenimientoActivo ? 'checked' : '' %> />
+        App en mantenimiento (bloquea el acceso en móvil)
+      </label>
+    </div>
+    <div class="field field-full">
+      <label for="mensajeMantenimiento">Mensaje de mantenimiento</label>
+      <textarea id="mensajeMantenimiento" name="mensajeMantenimiento" rows="3" placeholder="Estamos mejorando el servicio..."><%= form.mensajeMantenimiento %></textarea>
+    </div>
+  </div>
+</fieldset>
+
+<fieldset class="fieldset">
+  <legend>Enlaces legales y web</legend>
+  <div class="form-grid">
+    <div class="field field-full">
+      <label for="urlSitioWeb">Sitio web</label>
+      <input type="url" id="urlSitioWeb" name="urlSitioWeb" value="<%= form.urlSitioWeb %>" placeholder="https://..." />
+    </div>
+    <div class="field field-full">
+      <label for="urlTerminos">Términos y condiciones</label>
+      <input type="url" id="urlTerminos" name="urlTerminos" value="<%= form.urlTerminos %>" placeholder="https://..." />
+    </div>
+    <div class="field field-full">
+      <label for="urlPrivacidad">Política de privacidad</label>
+      <input type="url" id="urlPrivacidad" name="urlPrivacidad" value="<%= form.urlPrivacidad %>" placeholder="https://..." />
+    </div>
+  </div>
+</fieldset>
+
+<fieldset class="fieldset">
+  <legend>Redes sociales</legend>
+  <div class="form-grid">
+    <div class="field field-full">
+      <label for="red_facebook">Facebook</label>
+      <input type="url" id="red_facebook" name="red_facebook" value="<%= form.red_facebook %>" placeholder="https://facebook.com/..." />
+    </div>
+    <div class="field field-full">
+      <label for="red_instagram">Instagram</label>
+      <input type="url" id="red_instagram" name="red_instagram" value="<%= form.red_instagram %>" placeholder="https://instagram.com/..." />
+    </div>
+    <div class="field field-full">
+      <label for="red_tiktok">TikTok</label>
+      <input type="url" id="red_tiktok" name="red_tiktok" value="<%= form.red_tiktok %>" placeholder="https://tiktok.com/@..." />
+    </div>
+    <div class="field field-full">
+      <label for="red_youtube">YouTube</label>
+      <input type="url" id="red_youtube" name="red_youtube" value="<%= form.red_youtube %>" placeholder="https://youtube.com/..." />
+    </div>
+    <div class="field field-full">
+      <label for="red_linkedin">LinkedIn</label>
+      <input type="url" id="red_linkedin" name="red_linkedin" value="<%= form.red_linkedin %>" placeholder="https://linkedin.com/..." />
+    </div>
+  </div>
+</fieldset>

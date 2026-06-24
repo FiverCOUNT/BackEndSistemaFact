@@ -6,6 +6,7 @@ const ENDPOINTS = {
   '07': '/api/comprobantes/nota',
   '08': '/api/comprobantes/nota',
   '09': '/api/comprobantes/guia-remision',
+  '31': '/api/comprobantes/guia-remision-transportista',
 };
 
 class EmisorClientError extends Error {
@@ -94,9 +95,19 @@ async function emitirResumen(payload) {
   return request('/api/comprobantes/resumen', payload);
 }
 
+async function emitirGreEvento(payload) {
+  return request('/api/comprobantes/gre-evento', payload);
+}
+
+async function emitirGreBaja(payload) {
+  return request('/api/comprobantes/gre-baja', payload);
+}
+
 module.exports = {
   EmisorClientError,
   health,
   emitirComprobante,
   emitirResumen,
+  emitirGreEvento,
+  emitirGreBaja,
 };

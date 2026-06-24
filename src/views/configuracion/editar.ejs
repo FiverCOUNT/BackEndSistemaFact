@@ -1,0 +1,48 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title><%= title %> — BackEnd Easy</title>
+  <link rel="stylesheet" href="/css/style.css" />
+</head>
+<body>
+  <header class="header">
+    <h1>BackEnd Easy</h1>
+    <p>Panel web</p>
+  </header>
+
+  <main class="container layout-with-nav">
+    <%- include('../partials/nav', { active: 'configuracion' }) %>
+    <div class="main-content">
+      <section class="card">
+        <div class="card-header-row">
+          <div>
+            <h2><%= title %></h2>
+            <p class="api-hint">Datos globales que consume la app móvil (soporte, versiones, mantenimiento).</p>
+            <% if (typeof actualizadoEn !== 'undefined' && actualizadoEn) { %>
+              <p class="api-hint">Última actualización: <%= actualizadoEn %></p>
+            <% } %>
+          </div>
+          <a href="/" class="btn-link btn-secondary">← Inicio</a>
+        </div>
+
+        <% if (typeof flash !== 'undefined' && flash) { %>
+          <div class="message <%= flash.type %>"><%= flash.text %></div>
+        <% } %>
+        <% if (typeof error !== 'undefined' && error) { %>
+          <div class="message error"><%= error %></div>
+        <% } %>
+
+        <form class="form" method="POST" action="/configuracion">
+          <%- include('_form', { form }) %>
+          <div class="form-actions">
+            <button type="submit">Guardar configuración</button>
+            <a href="/" class="btn-link btn-secondary">Cancelar</a>
+          </div>
+        </form>
+      </section>
+    </div>
+  </main>
+</body>
+</html>

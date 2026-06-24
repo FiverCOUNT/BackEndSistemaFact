@@ -50,12 +50,50 @@ function toPublic(cliente) {
   };
 }
 
+function parseAddressInput(body) {
+  const raw = body.address ?? body.direccion;
+  if (!raw) return null;
+  if (typeof raw === 'string') {
+    const linea = raw.trim();
+    return linea ? { direccion: linea } : null;
+  }
+  if (typeof raw === 'object') return raw;
+  return null;
+}
+
+function buildAddressData(body) {
+  if (!body || typeof body !== 'object') return null;
+
+  const ubigeo = String(body.ubigeo || '').trim();
+  const direccion = String(body.direccion || body.linea || '').trim();
+  const departamento = String(body.departamento || '').trim();
+  const provincia = String(body.provincia || '').trim();
+  const distrito = String(body.distrito || '').trim();
+  const urbanizacion = String(body.urbanizacion || '').trim();
+
+  if (!ubigeo && !direccion && !departamento && !provincia && !distrito && !urbanizacion) {
+    return null;
+  }
+
+  return {
+    id: randomUUID(),
+    ubigeo: ubigeo || null,
+    departamento: departamento || null,
+    provincia: provincia || null,
+    distrito: distrito || null,
+    urbanizacion: urbanizacion || null,
+    direccion: direccion || null,
+    codLocal: String(body.cod_local || body.codLocal || '0000').trim() || '0000',
+  };
+}
+
 function parseCreateBody(body) {
   return {
     tipoDoc: String(body.tipo_doc || body.tipoDoc || '1').trim(),
     numeroDoc: String(body.numero_doc || body.numeroDoc || '').trim(),
     razonSocial: String(body.razon_social || body.razonSocial || '').trim(),
     telefono: (body.telefono || '').trim() || null,
+    addressInput: parseAddressInput(body),
   };
 }
 
@@ -101,9 +139,18 @@ async function findByDocumento(companyRuc, tipoDoc, numeroDoc) {
   });
 }
 
-async function create({ companyRuc, tipoDoc, numeroDoc, razonSocial, telefono = null }) {
-  const row = await prisma.cliente.create({
-    data: {
+async function create({
+  companyRuc,
+  tipoDoc,
+  numeroDoc,
+  razonSocial,
+  telefono = null,
+  addressInput = null,
+}) {
+  const addressData = buildAddressData(addressInput);
+
+  const row = await prisma.$transaction(async (tx) => {
+    const rowData = {
       id: randomUUID(),
       companyRuc,
       tipoDoc,
@@ -111,9 +158,19 @@ async function create({ companyRuc, tipoDoc, numeroDoc, razonSocial, telefono = 
       razonSocial,
       telefono,
       activo: true,
-    },
-    include: { address: true },
+    };
+
+    if (addressData) {
+      await tx.address.create({ data: addressData });
+      rowData.addressId = addressData.id;
+    }
+
+    return tx.cliente.create({
+      data: rowData,
+      include: { address: true },
+    });
   });
+
   return toApi(row);
 }
 

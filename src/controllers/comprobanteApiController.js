@@ -2,6 +2,7 @@ const comprobanteModel = require('../models/comprobanteModel');
 const productoSerieModel = require('../models/productoSerieModel');
 const comprobanteEmisionService = require('../services/comprobanteEmisionService');
 const emisorClient = require('../services/emisorClient');
+const greEventoService = require('../services/greEventoService');
 const {
   readAlmacenFromBody,
   readAlmacenFromQuery,
@@ -229,6 +230,44 @@ async function healthEmisor(req, res, next) {
   }
 }
 
+async function registrarGreEvento(req, res, next) {
+  try {
+    const result = await greEventoService.registrarEvento(
+      req.companyRuc,
+      req.params.id,
+      req.body,
+    );
+    return res.status(result.success ? 200 : 502).json(result);
+  } catch (err) {
+    if (err.status) {
+      return res.status(err.status).json({ success: false, message: err.message });
+    }
+    if (err.message) {
+      return res.status(400).json({ success: false, message: err.message });
+    }
+    next(err);
+  }
+}
+
+async function comunicarGreBaja(req, res, next) {
+  try {
+    const result = await greEventoService.comunicarBaja(
+      req.companyRuc,
+      req.params.id,
+      req.body,
+    );
+    return res.status(result.success ? 200 : 502).json(result);
+  } catch (err) {
+    if (err.status) {
+      return res.status(err.status).json({ success: false, message: err.message });
+    }
+    if (err.message) {
+      return res.status(400).json({ success: false, message: err.message });
+    }
+    next(err);
+  }
+}
+
 module.exports = {
   crearYEmitir,
   list,
@@ -238,4 +277,6 @@ module.exports = {
   emitir,
   enviarResumen,
   healthEmisor,
+  registrarGreEvento,
+  comunicarGreBaja,
 };

@@ -33,6 +33,8 @@ router.get('/comprobantes/emisor/health', comprobanteApiController.healthEmisor)
 router.get('/comprobantes', comprobanteApiController.list);
 router.post('/comprobantes', comprobanteApiController.crearYEmitir);
 router.post('/comprobantes/resumen', comprobanteApiController.enviarResumen);
+router.post('/comprobantes/:id/gre-eventos', comprobanteApiController.registrarGreEvento);
+router.post('/comprobantes/:id/gre-baja', comprobanteApiController.comunicarGreBaja);
 router.get('/comprobantes/:id/archivos/:tipo', comprobanteApiController.descargarArchivo);
 router.get('/comprobantes/:id/series-entregadas', comprobanteApiController.listSeriesEntregadas);
 router.get('/comprobantes/:id', comprobanteApiController.getById);

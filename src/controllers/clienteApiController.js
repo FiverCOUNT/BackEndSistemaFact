@@ -33,9 +33,11 @@ async function create(req, res, next) {
       });
     }
 
+    const { addressInput, ...clienteData } = parsed;
     const row = await clienteModel.create({
       companyRuc: req.companyRuc,
-      ...parsed,
+      ...clienteData,
+      addressInput,
     });
     res.status(201).json(row);
   } catch (err) {

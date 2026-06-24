@@ -21,7 +21,7 @@ async function payloadResumenParaEmision(company, boletas, correlativo) {
   return credencialesSunatService.attachToPayload(company, payload);
 }
 
-const TIPOS_EMITIBLES = new Set(['01', '03', '07', '08', '09']);
+const TIPOS_EMITIBLES = new Set(['01', '03', '07', '08', '09', '31']);
 const ESTADOS_REEMITIBLES = new Set(['BORRADOR', 'RECHAZADO']);
 
 function resolveInventarioEmitOptions(invoice, options = {}) {

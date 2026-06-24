@@ -514,6 +514,7 @@ body {
 
 .dashboard-card--catalogo:hover { border-color: #7856ff; }
 .dashboard-card--almacenes:hover { border-color: #f97316; }
+.dashboard-card--configuracion:hover { border-color: #38bdf8; }
 
 .col-actions {
   min-width: 220px;

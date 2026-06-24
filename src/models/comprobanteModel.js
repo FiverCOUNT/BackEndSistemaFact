@@ -20,6 +20,7 @@ const TIPO_DOC_LABEL = {
   '07': 'Nota crédito',
   '08': 'Nota débito',
   '09': 'Guía remisión',
+  '31': 'Guía remisión transportista',
 };
 
 const TIPO_CONFIG = {
@@ -28,6 +29,7 @@ const TIPO_CONFIG = {
   NOTA_CREDITO: { tipoDoc: '07', serie: 'FC01' },
   NOTA_DEBITO: { tipoDoc: '08', serie: 'FD01' },
   GUIA_EMISION: { tipoDoc: '09', serie: 'T001' },
+  GUIA_TRANSPORTISTA: { tipoDoc: '31', serie: 'V001' },
 };
 
 const COD_TO_TIPO = {
@@ -36,6 +38,7 @@ const COD_TO_TIPO = {
   '07': 'NOTA_CREDITO',
   '08': 'NOTA_DEBITO',
   '09': 'GUIA_EMISION',
+  '31': 'GUIA_TRANSPORTISTA',
 };
 
 const DETAIL_INCLUDE = {
@@ -67,6 +70,38 @@ function resolveTipoConfig(tipoRaw) {
   if (TIPO_CONFIG[key]) return TIPO_CONFIG[key];
   if (COD_TO_TIPO[key]) return TIPO_CONFIG[COD_TO_TIPO[key]];
   throw new Error(`Tipo de comprobante no válido: ${tipoRaw}`);
+}
+
+function parseRemitente(body) {
+  const remitente = body.remitente;
+  if (!remitente || typeof remitente !== 'object') {
+    throw new Error('remitente es obligatorio para GRE transportista.');
+  }
+  const tipoDoc = String(remitente.tipo_doc || remitente.tipoDoc || '6').trim();
+  const numeroDoc = String(
+    remitente.numero_doc || remitente.numeroDoc || remitente.ruc || '',
+  ).trim();
+  const razonSocial = String(
+    remitente.razon_social || remitente.razonSocial || remitente.nombre || '',
+  ).trim();
+  if (!numeroDoc) throw new Error('remitente.numero_doc es obligatorio.');
+  if (!razonSocial) throw new Error('remitente.razon_social es obligatorio.');
+  const digits = numeroDoc.replace(/\D/g, '');
+  return { tipoDoc, numeroDoc: digits || numeroDoc, razonSocial };
+}
+
+function parseGuiaRemitenteRef(body) {
+  const ref = body.guia_remitente || body.guiaRemitente;
+  if (!ref || typeof ref !== 'object') return null;
+  const serie = String(ref.serie || '').trim();
+  const correlativo = String(ref.correlativo || ref.numero || '').trim();
+  if (!serie || !correlativo) return null;
+  return {
+    tipo_doc: String(ref.tipo_doc || ref.tipoDoc || '09').trim(),
+    serie,
+    correlativo,
+    id: String(ref.id || '').trim() || null,
+  };
 }
 
 function parseReceptor(body) {
@@ -553,7 +588,7 @@ function toApiInvoice(invoice, options = {}) {
     hash: invoice.hash,
     hash_cpe: invoice.hash,
     sunat: sanitizeSunatForApi(invoice.sunatJson, includeSunatPayload),
-    puede_reenviar: estadoEfectivo === 'RECHAZADO' && ['01', '03', '07', '08', '09'].includes(invoice.tipoDoc),
+    puede_reenviar: estadoEfectivo === 'RECHAZADO' && ['01', '03', '07', '08', '09', '31'].includes(invoice.tipoDoc),
     cliente: invoice.cliente ? clienteModel.toApi(invoice.cliente) : undefined,
     client: invoice.cliente
       ? {
@@ -668,6 +703,48 @@ async function createFromMobileRequest(companyRuc, body) {
       ...buildEnvioMeta(body, company, clienteRow),
       facturas_vinculadas: facturas.map((f) => f.id),
     };
+  } else if (tipoConfig.tipoDoc === '31') {
+    if (lineas.length === 0) {
+      throw new Error('La GRE transportista requiere al menos una línea de detalle.');
+    }
+    const remitente = parseRemitente(body);
+    const catalogMap = await loadCatalogItems(companyRuc, lineas);
+    saleDetails = lineas.map((linea) => {
+      const catalogItemId = String(linea.catalog_item_id || linea.catalogItemId || '').trim();
+      const catalogItem = catalogMap.get(catalogItemId);
+      const cantidad = toNumber(linea.cantidad, 1);
+      const calc = calcularLinea(catalogItem, cantidad, null);
+      return {
+        catalogItemId,
+        catalogItem,
+        descripcion: calc.descripcion,
+        nombre: calc.nombre,
+        cantidad: calc.cantidad,
+        unidad: calc.unidad,
+        mtoValorUnitario: 0,
+        mtoPrecioUnitario: 0,
+        mtoBaseIgv: 0,
+        mtoValorVenta: 0,
+        mtoIgv: 0,
+        totalFactura: 0,
+        porcentajeIgv: 0,
+        tipAfeIgv: '30',
+      };
+    });
+    const clienteRow = await prisma.cliente.findFirst({
+      where: { companyRuc, tipoDoc: receptor.tipoDoc, numeroDoc: receptor.numeroDoc },
+      include: { address: true },
+    });
+    const guiaRemitente = parseGuiaRemitenteRef(body);
+    totalesJson = {
+      ...buildEnvioMeta(body, company, clienteRow),
+      remitente: {
+        tipo_doc: remitente.tipoDoc,
+        numero_doc: remitente.numeroDoc,
+        razon_social: remitente.razonSocial,
+      },
+      guia_remitente: guiaRemitente,
+    };
   } else {
     if (lineas.length === 0) {
       throw new Error('Debe incluir al menos una línea.');
@@ -710,7 +787,7 @@ async function createFromMobileRequest(companyRuc, body) {
     };
   }
 
-  const totales = tipoConfig.tipoDoc === '09'
+  const totales = (tipoConfig.tipoDoc === '09' || tipoConfig.tipoDoc === '31')
     ? {
         mtoOperGravadas: 0,
         mtoOperExoneradas: 0,
@@ -963,6 +1040,32 @@ async function getArchivoBuffer(invoice, tipo, options = {}) {
   return null;
 }
 
+async function findInvoiceRow(id) {
+  return prisma.invoice.findUnique({
+    where: { id },
+    select: { id: true, sunatJson: true, estado: true, companyRuc: true },
+  });
+}
+
+async function updateSunatJson(id, sunatJson) {
+  await prisma.invoice.update({
+    where: { id },
+    data: { sunatJson },
+  });
+}
+
+async function marcarAnulado(id, companyRuc, motivo) {
+  const row = await prisma.invoice.findFirst({ where: { id, companyRuc }, select: { sunatJson: true } });
+  const prev = row?.sunatJson && typeof row.sunatJson === 'object' ? row.sunatJson : {};
+  await prisma.invoice.update({
+    where: { id },
+    data: {
+      estado: 'ANULADO',
+      sunatJson: { ...prev, baja_motivo: motivo, baja_en: new Date().toISOString() },
+    },
+  });
+}
+
 async function deleteDraftInvoice(id, companyRuc) {
   const row = await prisma.invoice.findFirst({
     where: { id, companyRuc, estado: 'BORRADOR' },
@@ -992,4 +1095,7 @@ module.exports = {
   toApiInvoice,
   getArchivoBuffer,
   toPublic: toPublicSummary,
+  findInvoiceRow,
+  updateSunatJson,
+  marcarAnulado,
 };
