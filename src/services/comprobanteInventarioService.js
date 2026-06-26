@@ -3,35 +3,21 @@ const movimientoModel = require('../models/movimientoModel');
 
 const TIPOS_VENTA = new Set(['01', '03']);
 
-function buildLineasInventario(invoice, lineasBody = []) {
-  const lineasMap = new Map();
-  if (Array.isArray(lineasBody)) {
-    for (const raw of lineasBody) {
-      const id = String(raw.catalog_item_id || raw.catalogItemId || '').trim();
-      if (id) lineasMap.set(id, raw);
-    }
-  }
-
+function buildLineasInventario(invoice) {
   const out = [];
+
   for (const detail of invoice.details || []) {
     const item = detail.catalogItem;
     if (!item || item.kind === 'SERVICE') continue;
     if (!item.manejaStock && !item.manejaSerie) continue;
 
-    const raw = lineasMap.get(detail.catalogItemId) || {};
     const linea = {
       catalog_item_id: detail.catalogItemId,
       cantidad: Number(detail.cantidad),
     };
-
-    const serieIds = raw.serie_ids || raw.serieIds;
-    const series = raw.series || raw.numeros_serie || raw.numerosSerie;
-    if (serieIds) linea.serie_ids = serieIds;
-    if (series) linea.series = series;
-    if (detail.productoSerieId && !linea.serie_ids?.length) {
-      linea.serie_ids = [detail.productoSerieId];
+    if (detail.productoSerieId) {
+      linea.producto_serie_id = detail.productoSerieId;
     }
-
     out.push(linea);
   }
 
@@ -55,12 +41,12 @@ async function registrarSalidaPorComprobante(invoice, options = {}) {
     return { aplicado: false, motivo: 'ya_registrado', movimiento_id: existente.id };
   }
 
-  const almacenId = options.almacenId || null;
+  const almacenId = options.almacenId || invoice.almacenId || null;
   if (!almacenId) {
     return { aplicado: false, motivo: 'sin_almacen', message: 'Asigna un almacén al usuario o envía almacen_id en la venta.' };
   }
 
-  const lineas = buildLineasInventario(invoice, options.lineasBody);
+  const lineas = buildLineasInventario(invoice);
   if (!lineas.length) {
     return { aplicado: false, motivo: 'sin_lineas_inventario' };
   }
@@ -98,8 +84,8 @@ function mapInventarioError(result) {
     lineas_vacias: 'No hay líneas de inventario.',
     item_not_found: 'Producto no encontrado.',
     stock_insuficiente: 'Stock insuficiente para completar la venta.',
-    series_requeridas: 'El producto requiere números de serie.',
-    cantidad_series: 'La cantidad no coincide con las series indicadas.',
+    series_requeridas: 'El producto requiere número de serie.',
+    cantidad_series: 'Cada línea con serie debe tener cantidad 1.',
     series_no_disponibles: 'Una o más series no están disponibles.',
     cliente_requerido: 'Cliente requerido para la salida.',
   };

@@ -67,6 +67,19 @@ async function list(req, res, next) {
   }
 }
 
+async function listCompras(req, res, next) {
+  try {
+    const rows = await comprobanteModel.findComprasByCompany(req.companyRuc, {
+      desde: req.query.desde,
+      hasta: req.query.hasta,
+      ...serializeOptions(req),
+    });
+    res.json(rows);
+  } catch (err) {
+    next(err);
+  }
+}
+
 async function getById(req, res, next) {
   try {
     const invoice = await comprobanteModel.findByIdForEmission(req.params.id, req.companyRuc);
@@ -146,7 +159,6 @@ async function emitir(req, res, next) {
 
     const emitOptions = comprobanteEmisionService.resolveInventarioEmitOptions(invoice, {
       ...serializeOptions(req),
-      lineasBody: req.body?.lineas || req.body?.lineasBody || null,
       almacenId:
         serializeOptions(req).almacenId
         || req.body?.almacen_id
@@ -271,6 +283,7 @@ async function comunicarGreBaja(req, res, next) {
 module.exports = {
   crearYEmitir,
   list,
+  listCompras,
   getById,
   listSeriesEntregadas,
   descargarArchivo,

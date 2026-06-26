@@ -25,18 +25,9 @@ const TIPOS_EMITIBLES = new Set(['01', '03', '07', '08', '09', '31']);
 const ESTADOS_REEMITIBLES = new Set(['BORRADOR', 'RECHAZADO']);
 
 function resolveInventarioEmitOptions(invoice, options = {}) {
-  const meta =
-    invoice.totalesJson &&
-    typeof invoice.totalesJson === 'object' &&
-    invoice.totalesJson.meta_emision &&
-    typeof invoice.totalesJson.meta_emision === 'object'
-      ? invoice.totalesJson.meta_emision
-      : null;
-
   return {
     ...options,
-    almacenId: meta?.almacen_id || options.almacenId || null,
-    lineasBody: options.lineasBody || meta?.lineas_inventario || null,
+    almacenId: options.almacenId || invoice.almacenId || null,
   };
 }
 
@@ -199,8 +190,8 @@ async function crearYEmitirDesdeMobile(companyRuc, body, options = {}) {
 
   const emitOptions = resolveInventarioEmitOptions(invoice, {
     ...options,
-    lineasBody: body.lineas || body.lineasBody,
     almacenId: options.almacenId || body.almacen_id || body.almacenId || null,
+    lineasBody: invoice.tipoDoc === '07' ? (body.lineas || body.lineasBody || null) : null,
   });
 
   try {

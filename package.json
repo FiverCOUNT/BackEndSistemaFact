@@ -8,6 +8,8 @@
     "db:setup": "powershell -ExecutionPolicy Bypass -File scripts/setup-db.ps1",
     "db:push": "node scripts/with-env.js db push",
     "db:migrate": "node scripts/with-env.js migrate dev",
+    "db:migrate:deploy": "node scripts/with-env.js migrate deploy",
+    "db:verify": "node scripts/verify-mysql.js",
     "db:studio": "node scripts/with-env.js studio",
     "db:seed": "node prisma/seed.js",
     "start": "node src/server.js",

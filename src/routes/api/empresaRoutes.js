@@ -31,6 +31,7 @@ router.post('/clientes', clienteApiController.create);
 
 router.get('/comprobantes/emisor/health', comprobanteApiController.healthEmisor);
 router.get('/comprobantes', comprobanteApiController.list);
+router.get('/compras', comprobanteApiController.listCompras);
 router.post('/comprobantes', comprobanteApiController.crearYEmitir);
 router.post('/comprobantes/resumen', comprobanteApiController.enviarResumen);
 router.post('/comprobantes/:id/gre-eventos', comprobanteApiController.registrarGreEvento);

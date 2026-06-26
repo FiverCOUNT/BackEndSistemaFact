@@ -188,11 +188,15 @@ function buildDocumentoAfectado(documentoAfectado) {
   };
 }
 
+function resolveGuiaMeta(invoice) {
+  if (!invoice.guiaMetaJson || typeof invoice.guiaMetaJson !== 'object') {
+    return {};
+  }
+  return invoice.guiaMetaJson;
+}
+
 function resolveEnvio(invoice) {
-  const meta = invoice.totalesJson && typeof invoice.totalesJson === 'object'
-    ? invoice.totalesJson
-    : {};
-  const envio = meta.envio || {};
+  const envio = resolveGuiaMeta(invoice).envio || {};
 
   const partida = envio.partida || buildDireccionEnvio(
     invoice.company?.address,
@@ -318,9 +322,7 @@ function buildGuiaTransportistaPayload(invoice) {
   if (!company) throw new Error('No se encontró la empresa emisora.');
   if (!invoice.cliente) throw new Error('La guía requiere destinatario.');
 
-  const meta = invoice.totalesJson && typeof invoice.totalesJson === 'object'
-    ? invoice.totalesJson
-    : {};
+  const meta = resolveGuiaMeta(invoice);
   const remitente = meta.remitente;
   if (!remitente?.numero_doc) {
     throw new Error('La guía transportista no tiene remitente registrado.');

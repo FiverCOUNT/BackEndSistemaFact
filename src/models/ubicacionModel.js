@@ -68,11 +68,8 @@ function resolveOrigenDestino(mov) {
 }
 
 function extractSeriesFromLinea(linea) {
-  const numeros =
-    normalizeStringArray(linea.numerosSerieApi) ||
-    normalizeStringArray(linea.numerosSerie) ||
-    (linea.productoSerie ? [linea.productoSerie.numeroSerie] : []);
-  return [...new Set(numeros)];
+  const numero = linea.productoSerie?.numeroSerie;
+  return numero ? [numero] : [];
 }
 
 function expandLineaToItems(linea, { serieFilter = null } = {}) {

@@ -46,6 +46,7 @@ CREATE TABLE `companies` (
     `tiene_certificado` BOOLEAN NULL,
     `tiene_webhook` BOOLEAN NULL,
     `creado_en` VARCHAR(30) NULL,
+    `series_config` JSON NULL,
 
     UNIQUE INDEX `companies_address_id_key`(`address_id`),
     INDEX `companies_ruc_idx`(`ruc`),
@@ -89,10 +90,12 @@ CREATE TABLE `sale_details` (
     `mto_base_igv` DECIMAL(14, 4) NULL,
     `porcentaje_igv` DECIMAL(6, 2) NULL,
     `producto_serie_id` VARCHAR(36) NULL,
+    `estado` ENUM('ACTIVO', 'DEVUELTO', 'ACREDITADO') NOT NULL DEFAULT 'ACTIVO',
 
     INDEX `sale_details_invoice_id_idx`(`invoice_id`),
     INDEX `sale_details_producto_serie_id_idx`(`producto_serie_id`),
     INDEX `sale_details_catalog_item_id_idx`(`catalog_item_id`),
+    INDEX `sale_details_estado_idx`(`estado`),
     PRIMARY KEY (`id`)
 ) DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
 
@@ -129,11 +132,13 @@ CREATE TABLE `movimientos` (
     `comprobante_id` VARCHAR(36) NULL,
     `guia_remision_id` VARCHAR(36) NULL,
     `fecha_despacho` VARCHAR(30) NULL,
+    `cliente_id` VARCHAR(36) NULL,
 
     INDEX `movimientos_company_ruc_idx`(`company_ruc`),
     INDEX `movimientos_almacen_id_idx`(`almacen_id`),
     INDEX `movimientos_almacen_destino_id_idx`(`almacen_destino_id`),
     INDEX `movimientos_comprobante_id_idx`(`comprobante_id`),
+    INDEX `movimientos_cliente_id_idx`(`cliente_id`),
     PRIMARY KEY (`id`)
 ) DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
 
@@ -155,9 +160,6 @@ CREATE TABLE `linea_catalogo_items` (
     `cantidad` DECIMAL(14, 4) NOT NULL,
     `almacen_id` VARCHAR(36) NULL,
     `producto_serie_id` VARCHAR(36) NULL,
-    `series` JSON NULL,
-    `serie_ids` JSON NULL,
-    `numeros_serie` JSON NULL,
 
     INDEX `linea_catalogo_items_movimiento_id_idx`(`movimiento_id`),
     INDEX `linea_catalogo_items_catalog_item_id_idx`(`catalog_item_id`),
@@ -285,7 +287,8 @@ CREATE TABLE `invoices` (
     `total_impuestos` DECIMAL(14, 4) NULL,
     `sub_total` DECIMAL(14, 4) NULL,
     `mto_imp_venta` DECIMAL(14, 4) NULL,
-    `totales` JSON NULL,
+    `almacen_id` VARCHAR(36) NULL,
+    `guia_meta` JSON NULL,
     `motivo_codigo` VARCHAR(10) NULL,
     `motivo_nota` VARCHAR(255) NULL,
     `documento_afectado_id` VARCHAR(36) NULL,
@@ -308,7 +311,35 @@ CREATE TABLE `invoices` (
     INDEX `invoices_tipo_doc_idx`(`tipo_doc`),
     INDEX `invoices_documento_afectado_id_idx`(`documento_afectado_id`),
     INDEX `invoices_cliente_id_idx`(`cliente_id`),
+    INDEX `invoices_almacen_id_idx`(`almacen_id`),
     UNIQUE INDEX `invoices_company_ruc_tipo_doc_serie_correlativo_key`(`company_ruc`, `tipo_doc`, `serie`, `correlativo`),
+    PRIMARY KEY (`id`)
+) DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+
+-- CreateTable
+CREATE TABLE `configuracion` (
+    `id` INTEGER NOT NULL DEFAULT 1,
+    `nombre_app` VARCHAR(120) NOT NULL DEFAULT 'FactApp',
+    `nombre_desarrollador` VARCHAR(255) NOT NULL DEFAULT '',
+    `telefonos_soporte` JSON NULL,
+    `whatsapp_soporte` VARCHAR(20) NULL,
+    `email_soporte` VARCHAR(255) NULL,
+    `horario_soporte` VARCHAR(120) NULL,
+    `url_actualizacion` VARCHAR(500) NULL,
+    `url_actualizacion_apk` VARCHAR(500) NULL,
+    `version_actual` VARCHAR(20) NULL,
+    `version_minima` VARCHAR(20) NULL,
+    `notas_release` TEXT NULL,
+    `mantenimiento_activo` BOOLEAN NOT NULL DEFAULT false,
+    `mensaje_mantenimiento` TEXT NULL,
+    `url_terminos` VARCHAR(500) NULL,
+    `url_privacidad` VARCHAR(500) NULL,
+    `url_sitio_web` VARCHAR(500) NULL,
+    `url_logo` VARCHAR(500) NULL,
+    `mensaje_bienvenida` TEXT NULL,
+    `redes_sociales` JSON NULL,
+    `actualizado_en` VARCHAR(30) NULL,
+
     PRIMARY KEY (`id`)
 ) DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
 
@@ -352,6 +383,9 @@ ALTER TABLE `movimientos` ADD CONSTRAINT `movimientos_almacen_id_fkey` FOREIGN K
 ALTER TABLE `movimientos` ADD CONSTRAINT `movimientos_almacen_destino_id_fkey` FOREIGN KEY (`almacen_destino_id`) REFERENCES `almacenes`(`id`) ON DELETE SET NULL ON UPDATE CASCADE;
 
 -- AddForeignKey
+ALTER TABLE `movimientos` ADD CONSTRAINT `movimientos_cliente_id_fkey` FOREIGN KEY (`cliente_id`) REFERENCES `clientes`(`id`) ON DELETE SET NULL ON UPDATE CASCADE;
+
+-- AddForeignKey
 ALTER TABLE `linea_catalogo_items` ADD CONSTRAINT `linea_catalogo_items_movimiento_id_fkey` FOREIGN KEY (`movimiento_id`) REFERENCES `movimientos`(`id`) ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
@@ -385,4 +419,8 @@ ALTER TABLE `almacenes` ADD CONSTRAINT `almacenes_address_id_fkey` FOREIGN KEY (
 ALTER TABLE `invoices` ADD CONSTRAINT `invoices_cliente_id_fkey` FOREIGN KEY (`cliente_id`) REFERENCES `clientes`(`id`) ON DELETE SET NULL ON UPDATE CASCADE;
 
 -- AddForeignKey
+ALTER TABLE `invoices` ADD CONSTRAINT `invoices_almacen_id_fkey` FOREIGN KEY (`almacen_id`) REFERENCES `almacenes`(`id`) ON DELETE SET NULL ON UPDATE CASCADE;
+
+-- AddForeignKey
 ALTER TABLE `invoices` ADD CONSTRAINT `invoices_documento_afectado_id_fkey` FOREIGN KEY (`documento_afectado_id`) REFERENCES `invoices`(`id`) ON DELETE SET NULL ON UPDATE CASCADE;
+

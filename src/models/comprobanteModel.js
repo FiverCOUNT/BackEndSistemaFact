@@ -337,6 +337,30 @@ function buildEnvioMeta(body, company, cliente) {
   };
 }
 
+function mapLineasToSaleDetails(lineas, catalogMap) {
+  const saleDetails = [];
+
+  for (const linea of lineas) {
+    const catalogItemId = String(linea.catalog_item_id || linea.catalogItemId || '').trim();
+    const catalogItem = catalogMap.get(catalogItemId);
+    const precioOverride = linea.precio_unitario ?? linea.precioUnitario ?? null;
+    const cantidad = toNumber(linea.cantidad, 1);
+    const legacyIds = linea.serie_ids || linea.serieIds || [];
+    const productoSerieId = String(
+      linea.producto_serie_id || linea.productoSerieId || legacyIds[0] || '',
+    ).trim() || null;
+
+    saleDetails.push({
+      catalogItemId,
+      productoSerieId,
+      catalogItem,
+      ...calcularLinea(catalogItem, cantidad, precioOverride),
+    });
+  }
+
+  return saleDetails;
+}
+
 async function resolveDocumentoAfectadoId(companyRuc, documentoAfectado) {
   if (!documentoAfectado || typeof documentoAfectado !== 'object') {
     throw new Error('documento_afectado es obligatorio para notas.');
@@ -362,9 +386,40 @@ async function resolveDocumentoAfectadoId(companyRuc, documentoAfectado) {
   return row.id;
 }
 
+function toSaleDetailCreateInput(detail) {
+  const row = {
+    descripcion: detail.descripcion,
+    nombre: detail.nombre,
+    cantidad: detail.cantidad,
+    unidad: detail.unidad,
+    mtoPrecioUnitario: detail.mtoPrecioUnitario,
+    tipAfeIgv: detail.tipAfeIgv,
+    mtoValorVenta: detail.mtoValorVenta,
+    mtoIgv: detail.mtoIgv,
+    totalFactura: detail.totalFactura,
+    mtoValorUnitario: detail.mtoValorUnitario,
+    mtoBaseIgv: detail.mtoBaseIgv,
+    porcentajeIgv: detail.porcentajeIgv,
+    estado: detail.estado || 'ACTIVO',
+  };
+
+  const catalogItemId = String(detail.catalogItemId || '').trim();
+  if (catalogItemId) {
+    row.catalogItem = { connect: { id: catalogItemId } };
+  }
+
+  const productoSerieId = String(detail.productoSerieId || '').trim();
+  if (productoSerieId) {
+    row.productoSerie = { connect: { id: productoSerieId } };
+  }
+
+  return row;
+}
+
 function buildLineasLimitePorDocumento(details) {
   const byCatalog = new Map();
   for (const detail of details || []) {
+    if (detail.estado && detail.estado !== 'ACTIVO') continue;
     const catalogItemId = String(detail.catalogItemId || '').trim();
     if (!catalogItemId) continue;
     const cantidad = toNumber(detail.cantidad);
@@ -381,6 +436,68 @@ function buildLineasLimitePorDocumento(details) {
   return byCatalog;
 }
 
+const MOTIVOS_NC_DEVOLUCION = new Set(['01', '06', '07']);
+const MOTIVOS_NC_ACREDITACION = new Set(['04', '05', '09']);
+
+function estadoNotaCreditoParaLinea(motivoCodigo) {
+  const cod = String(motivoCodigo || '').trim();
+  if (MOTIVOS_NC_DEVOLUCION.has(cod)) return 'DEVUELTO';
+  if (MOTIVOS_NC_ACREDITACION.has(cod)) return 'ACREDITADO';
+  return null;
+}
+
+function labelEstadoLineaNoDisponible(estado) {
+  if (estado === 'DEVUELTO') return 'ya fue devuelta en otra nota de crédito';
+  if (estado === 'ACREDITADO') return 'ya fue acreditada en otra nota de crédito';
+  return 'no está disponible para otra nota de crédito';
+}
+
+async function aplicarEstadoLineasDocumentoAfectadoNotaCredito(invoice, lineasBody) {
+  const nuevoEstado = estadoNotaCreditoParaLinea(invoice.motivoCodigo);
+  if (!nuevoEstado || !invoice.documentoAfectadoId) return;
+
+  const doc = await prisma.invoice.findFirst({
+    where: { id: invoice.documentoAfectadoId },
+    include: { details: true },
+  });
+  if (!doc) return;
+
+  const idsToUpdate = new Set();
+  const bodyLineas = Array.isArray(lineasBody) ? lineasBody : [];
+  const motivo = String(invoice.motivoCodigo || '').trim();
+
+  if (motivo === '01' && bodyLineas.length === 0) {
+    for (const detail of doc.details) {
+      if (detail.estado === 'ACTIVO') idsToUpdate.add(detail.id);
+    }
+  } else {
+    for (const linea of bodyLineas) {
+      const saleDetailId = String(linea.sale_detail_id || linea.saleDetailId || '').trim();
+      if (saleDetailId) {
+        idsToUpdate.add(saleDetailId);
+        continue;
+      }
+      const catalogItemId = String(linea.catalog_item_id || linea.catalogItemId || '').trim();
+      if (!catalogItemId) continue;
+      const match = doc.details.find(
+        (d) => d.catalogItemId === catalogItemId && d.estado === 'ACTIVO',
+      );
+      if (match) idsToUpdate.add(match.id);
+    }
+  }
+
+  if (idsToUpdate.size === 0) return;
+
+  await prisma.saleDetail.updateMany({
+    where: {
+      id: { in: [...idsToUpdate] },
+      invoiceId: invoice.documentoAfectadoId,
+      estado: 'ACTIVO',
+    },
+    data: { estado: nuevoEstado },
+  });
+}
+
 async function validateNotaCreditoLineas(companyRuc, documentoAfectadoId, saleDetails, lineasBody = []) {
   const doc = await prisma.invoice.findFirst({
     where: { id: documentoAfectadoId, companyRuc },
@@ -390,12 +507,49 @@ async function validateNotaCreditoLineas(companyRuc, documentoAfectadoId, saleDe
 
   const limites = buildLineasLimitePorDocumento(doc.details);
   if (limites.size === 0) {
-    throw new Error('El documento afectado no tiene líneas para acreditar.');
+    throw new Error('El documento afectado no tiene líneas disponibles para acreditar.');
   }
 
   const acreditadas = new Map();
+  const lineasPorSaleDetail = new Map();
+
   for (let i = 0; i < saleDetails.length; i += 1) {
     const detail = saleDetails[i];
+    const lineaBody = lineasBody[i];
+    const saleDetailId = String(lineaBody?.sale_detail_id || lineaBody?.saleDetailId || '').trim();
+
+    if (saleDetailId) {
+      const origen = doc.details.find((d) => d.id === saleDetailId);
+      if (!origen) {
+        throw new Error('La línea referenciada no pertenece al documento afectado.');
+      }
+      if (origen.estado !== 'ACTIVO') {
+        throw new Error(
+          `La línea "${origen.nombre || origen.descripcion || saleDetailId}" `
+            + `${labelEstadoLineaNoDisponible(origen.estado)}.`,
+        );
+      }
+      const cantidadAcreditar = toNumber(detail.cantidad);
+      const prev = lineasPorSaleDetail.get(saleDetailId) || 0;
+      lineasPorSaleDetail.set(saleDetailId, round4(prev + cantidadAcreditar));
+      if (lineasPorSaleDetail.get(saleDetailId) > toNumber(origen.cantidad) + 0.0001) {
+        throw new Error(
+          `La cantidad a acreditar de "${origen.nombre || origen.descripcion}" `
+            + `no puede superar la facturada (${toNumber(origen.cantidad)}).`,
+        );
+      }
+      const precioOverride = lineaBody?.precio_unitario ?? lineaBody?.precioUnitario ?? null;
+      if (precioOverride != null && precioOverride !== '') {
+        if (toNumber(precioOverride) > toNumber(origen.mtoPrecioUnitario) + 0.009) {
+          throw new Error(
+            `El monto a acreditar de "${origen.nombre || origen.descripcion}" `
+              + 'no puede superar el precio facturado.',
+          );
+        }
+      }
+      continue;
+    }
+
     const catalogItemId = String(detail.catalogItemId || '').trim();
     if (!catalogItemId) {
       throw new Error('Cada línea de la nota de crédito debe referenciar un producto del documento afectado.');
@@ -404,15 +558,14 @@ async function validateNotaCreditoLineas(companyRuc, documentoAfectadoId, saleDe
     const limite = limites.get(catalogItemId);
     if (!limite) {
       throw new Error(
-        `El producto "${detail.nombre || catalogItemId}" no está en el documento afectado. `
-          + 'La nota de crédito solo puede incluir ítems de esa factura o boleta.',
+        `El producto "${detail.nombre || catalogItemId}" no está disponible en el documento afectado. `
+          + 'La nota de crédito solo puede incluir ítems activos de esa factura o boleta.',
       );
     }
 
     const prev = acreditadas.get(catalogItemId) || 0;
     acreditadas.set(catalogItemId, round4(prev + toNumber(detail.cantidad)));
 
-    const lineaBody = lineasBody[i];
     const precioOverride = lineaBody?.precio_unitario ?? lineaBody?.precioUnitario ?? null;
     if (precioOverride == null || precioOverride === '') continue;
     if (toNumber(precioOverride) > limite.precioMax + 0.009) {
@@ -427,7 +580,7 @@ async function validateNotaCreditoLineas(companyRuc, documentoAfectadoId, saleDe
     if (!limite) continue;
     if (cantidadAcreditar > limite.cantidad + 0.0001) {
       throw new Error(
-        `La cantidad a acreditar de "${limite.nombre}" no puede superar la facturada (${limite.cantidad}).`,
+        `La cantidad a acreditar de "${limite.nombre}" no puede superar la disponible (${limite.cantidad}).`,
       );
     }
   }
@@ -469,6 +622,7 @@ function toApiSaleDetail(detail) {
     mto_base_igv: toNumber(detail.mtoBaseIgv),
     porcentaje_igv: toNumber(detail.porcentajeIgv),
     producto_serie_id: detail.productoSerieId,
+    estado: detail.estado || 'ACTIVO',
   };
   if (detail.productoSerie) {
     row.producto_serie = productoSerieModel.toApi(detail.productoSerie);
@@ -530,6 +684,26 @@ function sanitizeSunatForApi(sunatJson, includePayload = true) {
   return cleaned;
 }
 
+function toApiCompraInvoice(invoice, sellerCompany, options = {}) {
+  if (!invoice) return null;
+  const base = toApiInvoice(invoice, { ...options, includeSunatPayload: false });
+  const seller = sellerCompany || null;
+  return {
+    ...base,
+    sentido: 'RECIBIDO',
+    company: seller
+      ? {
+          ruc: seller.ruc,
+          nombre: seller.nombre,
+          nombre_comercial: seller.nombreComercial || seller.nombre,
+        }
+      : {
+          ruc: invoice.companyRuc,
+          nombre: invoice.companyRuc,
+        },
+  };
+}
+
 function toApiInvoice(invoice, options = {}) {
   if (!invoice) return null;
 
@@ -565,6 +739,7 @@ function toApiInvoice(invoice, options = {}) {
     total_impuestos: toNumber(invoice.totalImpuestos),
     sub_total: toNumber(invoice.subTotal),
     mto_imp_venta: toNumber(invoice.mtoImpVenta),
+    almacen_id: invoice.almacenId || undefined,
     motivo_codigo: invoice.motivoCodigo,
     motivo_nota: invoice.motivoNota,
     documento_afectado_id: invoice.documentoAfectadoId,
@@ -687,7 +862,8 @@ async function createFromMobileRequest(companyRuc, body) {
   const company = await findCompany(companyRuc);
 
   let saleDetails = [];
-  let totalesJson = null;
+  let guiaMetaJson = null;
+  let almacenId = null;
 
   if (tipoConfig.tipoDoc === '09') {
     const facturas = await loadFacturasVinculadas(
@@ -699,7 +875,7 @@ async function createFromMobileRequest(companyRuc, body) {
       where: { companyRuc, tipoDoc: receptor.tipoDoc, numeroDoc: receptor.numeroDoc },
       include: { address: true },
     });
-    totalesJson = {
+    guiaMetaJson = {
       ...buildEnvioMeta(body, company, clienteRow),
       facturas_vinculadas: facturas.map((f) => f.id),
     };
@@ -736,7 +912,7 @@ async function createFromMobileRequest(companyRuc, body) {
       include: { address: true },
     });
     const guiaRemitente = parseGuiaRemitenteRef(body);
-    totalesJson = {
+    guiaMetaJson = {
       ...buildEnvioMeta(body, company, clienteRow),
       remitente: {
         tipo_doc: remitente.tipoDoc,
@@ -751,43 +927,11 @@ async function createFromMobileRequest(companyRuc, body) {
     }
 
     const catalogMap = await loadCatalogItems(companyRuc, lineas);
-    saleDetails = lineas.map((linea) => {
-      const catalogItemId = String(linea.catalog_item_id || linea.catalogItemId || '').trim();
-      const catalogItem = catalogMap.get(catalogItemId);
-      const cantidad = toNumber(linea.cantidad, 1);
-      const precioOverride = linea.precio_unitario ?? linea.precioUnitario ?? null;
-      const calc = calcularLinea(catalogItem, cantidad, precioOverride);
-      const serieIds = linea.serie_ids || linea.serieIds || [];
-      const productoSerieId = Array.isArray(serieIds) && serieIds.length === 1 ? serieIds[0] : null;
-
-      return {
-        catalogItemId,
-        productoSerieId,
-        catalogItem,
-        ...calc,
-      };
-    });
-
-    totalesJson = {
-      meta_emision: {
-        almacen_id: String(body.almacen_id || body.almacenId || '').trim() || null,
-        lineas_inventario: lineas.map((linea) => {
-          const catalogItemId = String(linea.catalog_item_id || linea.catalogItemId || '').trim();
-          const entry = {
-            catalog_item_id: catalogItemId,
-            cantidad: toNumber(linea.cantidad, 1),
-          };
-          const serieIds = linea.serie_ids || linea.serieIds;
-          const series = linea.series || linea.numeros_serie || linea.numerosSerie;
-          if (serieIds) entry.serie_ids = serieIds;
-          if (series) entry.series = series;
-          return entry;
-        }),
-      },
-    };
+    saleDetails = mapLineasToSaleDetails(lineas, catalogMap);
+    almacenId = String(body.almacen_id || body.almacenId || '').trim() || null;
   }
 
-  const totales = (tipoConfig.tipoDoc === '09' || tipoConfig.tipoDoc === '31')
+  const montos = (tipoConfig.tipoDoc === '09' || tipoConfig.tipoDoc === '31')
     ? {
         mtoOperGravadas: 0,
         mtoOperExoneradas: 0,
@@ -830,36 +974,22 @@ async function createFromMobileRequest(companyRuc, body) {
         tipoMoneda: 'PEN',
         formaPago: 'Contado',
         observacion: (body.observaciones || body.observacion || '').trim() || null,
-        mtoOperGravadas: totales.mtoOperGravadas,
-        mtoOperExoneradas: totales.mtoOperExoneradas,
-        mtoOperInafectas: totales.mtoOperInafectas,
-        mtoIgv: totales.mtoIgv,
-        totalImpuestos: totales.totalImpuestos,
-        subTotal: totales.subTotal,
-        mtoImpVenta: totales.mtoImpVenta,
-        totalesJson,
+        mtoOperGravadas: montos.mtoOperGravadas,
+        mtoOperExoneradas: montos.mtoOperExoneradas,
+        mtoOperInafectas: montos.mtoOperInafectas,
+        mtoIgv: montos.mtoIgv,
+        totalImpuestos: montos.totalImpuestos,
+        subTotal: montos.subTotal,
+        mtoImpVenta: montos.mtoImpVenta,
+        almacenId,
+        guiaMetaJson,
         motivoCodigo,
         motivoNota,
         documentoAfectadoId,
         estado: 'BORRADOR',
         clienteId,
         details: {
-          create: saleDetails.map((detail) => ({
-            catalogItemId: detail.catalogItemId,
-            descripcion: detail.descripcion,
-            nombre: detail.nombre,
-            cantidad: detail.cantidad,
-            unidad: detail.unidad,
-            mtoPrecioUnitario: detail.mtoPrecioUnitario,
-            tipAfeIgv: detail.tipAfeIgv,
-            mtoValorVenta: detail.mtoValorVenta,
-            mtoIgv: detail.mtoIgv,
-            totalFactura: detail.totalFactura,
-            mtoValorUnitario: detail.mtoValorUnitario,
-            mtoBaseIgv: detail.mtoBaseIgv,
-            porcentajeIgv: detail.porcentajeIgv,
-            productoSerieId: detail.productoSerieId,
-          })),
+          create: saleDetails.map(toSaleDetailCreateInput),
         },
       },
     });
@@ -900,6 +1030,63 @@ async function findAllByCompany(companyRuc, { desde = null, hasta = null, apiBas
 
   return filtered.map((row) =>
     toApiInvoice(row, { apiBaseUrl, companyRuc, includeSunatPayload: false }),
+  );
+}
+
+/** Compras: comprobantes que otras empresas emitieron a mi RUC (soy el cliente/receptor). */
+async function findComprasByCompany(companyRuc, { desde = null, hasta = null, apiBaseUrl = null } = {}) {
+  const receptorRuc = String(companyRuc || '').trim();
+  if (!receptorRuc) return [];
+
+  const rows = await prisma.invoice.findMany({
+    where: {
+      companyRuc: { not: receptorRuc },
+      cliente: { numeroDoc: receptorRuc },
+      estado: { in: ['ACEPTADO', 'ENVIADO'] },
+      tipoDoc: { in: ['01', '03', '07', '08'] },
+    },
+    include: INVOICE_INCLUDE,
+  });
+
+  let filtered = rows;
+  if (desde || hasta) {
+    const desdeMs = desde ? calendarDayStartMsPe(desde) : null;
+    const hastaMs = hasta ? calendarDayEndMsPe(hasta) : null;
+
+    filtered = rows.filter((row) => {
+      const ms = Number.parseInt(String(row.fechaEmision || ''), 10);
+      if (!Number.isFinite(ms)) return false;
+      if (desdeMs != null && ms < desdeMs) return false;
+      if (hastaMs != null && ms > hastaMs) return false;
+      return true;
+    });
+  }
+
+  filtered.sort((a, b) => {
+    const byFecha = compareStoredTimestamps(b.fechaEmision, a.fechaEmision);
+    if (byFecha !== 0) return byFecha;
+    const serieCmp = String(a.serie || '').localeCompare(String(b.serie || ''));
+    if (serieCmp !== 0) return serieCmp;
+    return String(b.correlativo || '').localeCompare(String(a.correlativo || ''), undefined, {
+      numeric: true,
+    });
+  });
+
+  const sellerRucs = [...new Set(filtered.map((row) => row.companyRuc).filter(Boolean))];
+  const sellers = sellerRucs.length
+    ? await prisma.company.findMany({
+        where: { ruc: { in: sellerRucs } },
+        select: { ruc: true, nombre: true, nombreComercial: true },
+      })
+    : [];
+  const sellerMap = new Map(sellers.map((s) => [s.ruc, s]));
+
+  return filtered.map((row) =>
+    toApiCompraInvoice(row, sellerMap.get(row.companyRuc), {
+      apiBaseUrl,
+      companyRuc: receptorRuc,
+      includeSunatPayload: false,
+    }),
   );
 }
 
@@ -1002,6 +1189,14 @@ async function applyEmisionResult(id, companyRuc, tipoDoc, emisorData, options =
     include: INVOICE_INCLUDE,
   });
 
+  if (
+    tipoDoc === '07'
+    && ['ACEPTADO', 'ENVIADO'].includes(estado)
+    && updated.documentoAfectadoId
+  ) {
+    await aplicarEstadoLineasDocumentoAfectadoNotaCredito(updated, options.lineasBody || null);
+  }
+
   return toApiInvoice(updated, options);
 }
 
@@ -1084,6 +1279,7 @@ async function deleteDraftInvoice(id, companyRuc) {
 module.exports = {
   findAll,
   findAllByCompany,
+  findComprasByCompany,
   findByIdForEmission,
   findCompany,
   getNextResumenCorrelativo,

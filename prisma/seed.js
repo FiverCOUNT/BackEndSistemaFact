@@ -514,8 +514,6 @@ async function main() {
             manejaSerie: true,
             almacenId: IDS.almacenPrincipal,
             productoSerieId: IDS.serieLaptop,
-            numerosSerie: ['SN-DEMO-LAP-001'],
-            serieIds: [IDS.serieLaptop],
           },
           {
             catalogItemId: IDS.catalogMouse,
